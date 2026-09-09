@@ -10,7 +10,7 @@ enum class StageDataProjectionResult : std::uint8_t {
 };
 
 [[nodiscard]] StageDataProjectionResult stage_data_projection_valid(
-	const Stage1State &state
+	const StageState &state
 ) noexcept
 {
 	if(state.stage_data.template_count < 0 ||
@@ -27,7 +27,7 @@ enum class StageDataProjectionResult : std::uint8_t {
 }
 
 [[nodiscard]] EnemyUpdateScriptData enemy_script_data(
-	Stage1State &state
+	StageState &state
 ) noexcept
 {
 	const auto template_count = static_cast<std::size_t>(
@@ -44,7 +44,7 @@ enum class StageDataProjectionResult : std::uint8_t {
 } // namespace
 
 Stage1InvalidationResult stage1_invalidate(
-	Stage1State &state, Stage1InvalidationPresentation &presentation
+	StageState &state, Stage1InvalidationPresentation &presentation
 ) noexcept
 {
 	Stage1InvalidationContext context{
@@ -72,7 +72,7 @@ Stage1InvalidationResult stage1_invalidate(
 }
 
 PlayerBombUpdateOutcome player_move_and_bomb_update(
-	Stage1State &state, BombAnimationCallbacks &animation_callbacks,
+	StageState &state, BombAnimationCallbacks &animation_callbacks,
 	BombPresentationCallbacks &bomb_callbacks
 ) noexcept
 {
@@ -102,7 +102,7 @@ PlayerBombUpdateOutcome player_move_and_bomb_update(
 }
 
 Stage1EntitiesStepResult stage1_entities_update(
-	Stage1State &state, Stage1EntitiesPresentation &presentation
+	StageState &state, Stage1EntitiesPresentation &presentation
 ) noexcept
 {
 	if(state.enemies_enabled) {

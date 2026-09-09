@@ -8,8 +8,10 @@
 #include "th04/core/std.hpp"
 #include "th04/core/bullet.hpp"
 #include "th04/core/enemy.hpp"
+#include "th04/core/boss.hpp"
 #include <array>
 #include <bit>
+#include <vector>
 
 namespace th04::core {
 using Point = pc98::th0405::SubpixelPoint;
@@ -36,11 +38,27 @@ struct State {
 	std::uint16_t stage_frame{};
 	std::uint8_t rank{};
 	bool midboss_active{};
+	MidbossState midboss{};
+	BossState boss{};
+	CircleState circles{};
+	BossExplosionState boss_explosions{};
+	bool boss_active{}, stage_clear_requested{};
+	bool dialog_pending{};
+	bool pointnum_times_2{};
+	std::int16_t playfield_shake_x{}, playfield_shake_y{};
+	std::int16_t playfield_shake_anim_time{};
+	std::int8_t playfield_shake_redraw_time{};
+	std::uint16_t total_std_frames{};
 	std::int16_t scroll_last_delta{};
 	StdState std_data{};
 	BulletState bullets{};
 	EnemyState enemies{};
 	std::array<std::uint16_t, 25 * 32> tile_ring{};
+	std::vector<std::uint8_t> map_data{};
+	std::int16_t tile_ring_row_filled{};
+	std::uint8_t scroll_subpixel_line{}, scroll_lines_pending{}, scroll_lines_prev_frame{};
+	std::uint8_t page_back{};
+	std::array<std::int16_t, 2> scroll_line_on_page{};
 	ScoreState score{};
 	ExtendState resources{};
 	// randring1/randring2 are code-segment entry points over this same ring.
@@ -76,6 +94,7 @@ struct Presentation {
 	virtual void bomb_star(Point, std::uint8_t) noexcept {}
 	virtual void growing_circle(Point) noexcept {}
 	virtual void graph_scroll(std::int16_t) noexcept {}
+	virtual void playfield_shake(Point) noexcept {}
 };
 
 inline void playperf_raise(State &state, std::uint8_t delta) noexcept

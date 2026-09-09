@@ -10,7 +10,7 @@ namespace th02::core {
 
 // The presentation-only calls reached by stage/init.cpp::continue_resume().
 // `invalidate_bullet()` is the existing synchronous bullet-clear boundary;
-// implementations must not mutate the borrowed Stage1State while a callback is
+// implementations must not mutate the borrowed StageState while a callback is
 // active.
 class StageContinuePresentationCallbacks : public EnemyBulletInvalidationCallbacks {
 public:
@@ -33,7 +33,7 @@ enum class StageContinueResult : std::uint8_t {
 // reset, and two tile redraw calls; a host-invalid page keeps that prefix and
 // stops before palette and enter-overlay work.
 [[nodiscard]] StageContinueResult stage1_continue_resume(
-	Stage1State &state, StageContinuePresentationCallbacks &presentation
+	StageState &state, StageContinuePresentationCallbacks &presentation
 ) noexcept;
 
 } // namespace th02::core

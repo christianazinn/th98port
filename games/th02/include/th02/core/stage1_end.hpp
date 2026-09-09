@@ -44,7 +44,7 @@ public:
 // Original Rika ending: no dialog_post. Both independent release/press waits
 // and all 21 two-frame overlay steps precede the stage-ID increment.
 [[nodiscard]] Stage1EndWait stage1_end_wait(const Stage1EndState &end) noexcept;
-[[nodiscard]] Stage1EndWait stage1_end_begin(Stage1State &state,
+[[nodiscard]] Stage1EndWait stage1_end_begin(StageState &state,
 	Stage1EndState &end, Stage1EndPresentation &presentation) noexcept;
 // Meira shares the continuation below, but has 11 boxes and retains flash.frame.
 [[nodiscard]] Stage1EndWait stage2_end_begin(StageState &state,
@@ -55,10 +55,10 @@ public:
 	Stage1EndState &end, Stage1EndPresentation &presentation) noexcept;
 [[nodiscard]] Stage1EndWait stage_extra_end_begin(StageState &state,
 	Stage1EndState &end, Stage1EndPresentation &presentation) noexcept;
-[[nodiscard]] Stage1EndWait stage1_end_after_delay(Stage1State &state,
+[[nodiscard]] Stage1EndWait stage1_end_after_delay(StageState &state,
 	Stage1EndState &end, Stage1EndPresentation &presentation) noexcept;
-[[nodiscard]] Stage1EndWait stage1_end_input(Stage1State &state,
+[[nodiscard]] Stage1EndWait stage1_end_input(StageState &state,
 	Stage1EndState &end, std::uint16_t input, Stage1EndPresentation &presentation) noexcept;
-[[nodiscard]] Stage1EndWait stage1_end_acknowledgement(Stage1State &state,
+[[nodiscard]] Stage1EndWait stage1_end_acknowledgement(StageState &state,
 	Stage1EndState &end, bool pressed, Stage1EndPresentation &presentation) noexcept;
 } // namespace th02::core

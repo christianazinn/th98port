@@ -29,15 +29,15 @@ public:
 [[nodiscard]] Stage1IntroWait stage1_intro_wait(const Stage1IntroState &intro) noexcept;
 // Actual rika_init sequence: BGM, dialog_pre, all16 generic boxes, dialog_post,
 // then the real combat setup suffix. The source dialog cursor is not reset.
-[[nodiscard]] Stage1IntroWait stage1_intro_begin(Stage1State &state,
+[[nodiscard]] Stage1IntroWait stage1_intro_begin(StageState &state,
 	Stage1IntroState &intro, Stage1IntroPresentation &presentation) noexcept;
 [[nodiscard]] Stage1IntroWait stage3_intro_begin(StageState &state,
 	Stage1IntroState &intro, Stage1IntroPresentation &presentation) noexcept;
-[[nodiscard]] Stage1IntroWait stage1_intro_after_delay(Stage1State &state,
+[[nodiscard]] Stage1IntroWait stage1_intro_after_delay(StageState &state,
 	Stage1IntroState &intro, Stage1IntroPresentation &presentation) noexcept;
-[[nodiscard]] Stage1IntroWait stage1_intro_input(Stage1State &state,
+[[nodiscard]] Stage1IntroWait stage1_intro_input(StageState &state,
 	Stage1IntroState &intro, std::uint16_t input, Stage1IntroPresentation &presentation) noexcept;
-[[nodiscard]] Stage1IntroWait stage1_intro_acknowledgement(Stage1State &state,
+[[nodiscard]] Stage1IntroWait stage1_intro_acknowledgement(StageState &state,
 	Stage1IntroState &intro, bool pressed, Stage1IntroPresentation &presentation) noexcept;
 
 } // namespace th02::core

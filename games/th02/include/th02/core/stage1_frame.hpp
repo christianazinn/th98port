@@ -29,18 +29,18 @@ public:
 // The contiguous stage_loop suffix after sparks_update_and_render. Refuses
 // duplicate/out-of-order calls without restarting the pending frame. A paused
 // frame has not scrolled, flipped, incremented counters, or transferred score.
-[[nodiscard]] Stage1FramePhase stage1_frame_finish(Stage1State &state,
+[[nodiscard]] Stage1FramePhase stage1_frame_finish(StageState &state,
 	Stage1FrameSchedule &schedule, Stage1FramePresentation &presentation) noexcept;
-[[nodiscard]] Stage1FramePhase stage1_frame_resume(Stage1State &state,
+[[nodiscard]] Stage1FramePhase stage1_frame_resume(StageState &state,
 	Stage1FrameSchedule &schedule, bool pause_quit,
 	Stage1FramePresentation &presentation) noexcept;
 
 // Call only after the real corresponding lifecycle has returned, including
 // dialogue and its score/input work. These resume the suspended call site;
 // they do NOT implement Rika init/end, reset state, or certify a full session.
-[[nodiscard]] Stage1FramePhase stage1_frame_after_boss_init(Stage1State &state,
+[[nodiscard]] Stage1FramePhase stage1_frame_after_boss_init(StageState &state,
 	Stage1FrameSchedule &schedule, Stage1FramePresentation &presentation) noexcept;
-[[nodiscard]] Stage1FramePhase stage1_frame_after_stage_end(Stage1State &state,
+[[nodiscard]] Stage1FramePhase stage1_frame_after_stage_end(StageState &state,
 	Stage1FrameSchedule &schedule, Stage1FramePresentation &presentation) noexcept;
 
 } // namespace th02::core

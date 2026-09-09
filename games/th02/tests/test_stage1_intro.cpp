@@ -25,9 +25,9 @@ struct Sink final : Stage1IntroPresentation, Stage1FramePresentation {
 	void page_access(std::size_t) noexcept override {}
 	void egc_begin() noexcept override {}
 	void box_area_invalidate() noexcept override {}
-	void tiles_render(const Stage1State &) noexcept override {}
+	void tiles_render(const StageState &) noexcept override {}
 	void egc_end() noexcept override {}
-	void player_put(const Stage1State &) noexcept override {}
+	void player_put(const StageState &) noexcept override {}
 	void box_put(std::int16_t, std::int16_t, std::int16_t) noexcept override {}
 	void box_wipe() noexcept override { first_face = true; }
 	void face_put(std::int16_t face) noexcept override { if (first_face) { faces.push_back(face); first_face = false; } }
@@ -40,7 +40,7 @@ struct Sink final : Stage1IntroPresentation, Stage1FramePresentation {
 
 void complete_intro()
 {
-	Stage1State state{};
+	StageState state{};
 	Stage1IntroState intro{};
 	Sink sink{};
 	state.stage_frame = 900;
@@ -100,7 +100,7 @@ void complete_intro()
 
 void invalid_text_keeps_prefix()
 {
-	Stage1State state{};
+	StageState state{};
 	Stage1IntroState intro{};
 	Sink sink{};
 	state.dialog.box_current = 64;

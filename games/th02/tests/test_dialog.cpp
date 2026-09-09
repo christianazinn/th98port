@@ -105,16 +105,16 @@ void slides()
 		void page_access(std::size_t page) noexcept override { pages.push_back(page); }
 		void egc_begin() noexcept override {}
 		void box_area_invalidate() noexcept override {}
-		void tiles_render(const Stage1State &) noexcept override { ++tiles; }
+		void tiles_render(const StageState &) noexcept override { ++tiles; }
 		void egc_end() noexcept override {}
-		void player_put(const Stage1State &) noexcept override {}
+		void player_put(const StageState &) noexcept override {}
 		void box_put(std::int16_t left, std::int16_t top, std::int16_t bottom) noexcept override {
 			require(top == 319 && bottom == 351);
 			last_left = left;
 			++boxes;
 		}
 	} sink;
-	Stage1State state{};
+	StageState state{};
 	DialogState dialog{};
 	DialogSlideState slide{};
 	state.scroll.line = 399;

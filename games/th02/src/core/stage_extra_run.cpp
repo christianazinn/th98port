@@ -2,7 +2,7 @@
 
 namespace th02::core {
 namespace {
-Stage1RunWait frame_result(Stage1State &state, StageExtraRunState &run,
+Stage1RunWait frame_result(StageState &state, StageExtraRunState &run,
 	StageExtraRunPresentation &presentation) noexcept
 {
 	switch (run.frame.phase) {
@@ -25,7 +25,7 @@ Stage1RunWait frame_result(Stage1State &state, StageExtraRunState &run,
 	return stage_extra_run_wait(run);
 }
 
-Stage1RunWait lifecycle_result(Stage1State &state, StageExtraRunState &run,
+Stage1RunWait lifecycle_result(StageState &state, StageExtraRunState &run,
 	StageExtraRunPresentation &presentation) noexcept
 {
 	if (run.phase == Stage1RunPhase::intro) {
@@ -76,7 +76,7 @@ Stage1RunWait stage_extra_run_wait(const StageExtraRunState &run) noexcept
 	return Stage1RunWait::refused;
 }
 
-Stage1RunWait stage_extra_run_prepare(Stage1State &state, StageExtraRunState &run,
+Stage1RunWait stage_extra_run_prepare(StageState &state, StageExtraRunState &run,
 	StageExtraRunPresentation &presentation) noexcept
 {
 	if (run.phase != Stage1RunPhase::not_started && run.phase != Stage1RunPhase::ready)
@@ -95,7 +95,7 @@ Stage1RunWait stage_extra_run_prepare(Stage1State &state, StageExtraRunState &ru
 	return stage_extra_run_wait(run);
 }
 
-Stage1RunWait stage_extra_run_input(Stage1State &state, StageExtraRunState &run,
+Stage1RunWait stage_extra_run_input(StageState &state, StageExtraRunState &run,
 	std::uint16_t input, StageExtraRunPresentation &presentation) noexcept
 {
 	if (run.phase == Stage1RunPhase::intro) {
@@ -126,7 +126,7 @@ Stage1RunWait stage_extra_run_input(Stage1State &state, StageExtraRunState &run,
 	return frame_result(state, run, presentation);
 }
 
-Stage1RunWait stage_extra_run_after_delay(Stage1State &state, StageExtraRunState &run,
+Stage1RunWait stage_extra_run_after_delay(StageState &state, StageExtraRunState &run,
 	StageExtraRunPresentation &presentation) noexcept
 {
 	if (run.phase == Stage1RunPhase::intro)
@@ -136,7 +136,7 @@ Stage1RunWait stage_extra_run_after_delay(Stage1State &state, StageExtraRunState
 	return lifecycle_result(state, run, presentation);
 }
 
-Stage1RunWait stage_extra_run_acknowledgement(Stage1State &state, StageExtraRunState &run,
+Stage1RunWait stage_extra_run_acknowledgement(StageState &state, StageExtraRunState &run,
 	bool pressed, StageExtraRunPresentation &presentation) noexcept
 {
 	if (run.phase == Stage1RunPhase::intro)
@@ -146,7 +146,7 @@ Stage1RunWait stage_extra_run_acknowledgement(Stage1State &state, StageExtraRunS
 	return lifecycle_result(state, run, presentation);
 }
 
-Stage1RunWait stage_extra_run_after_pause(Stage1State &state, StageExtraRunState &run,
+Stage1RunWait stage_extra_run_after_pause(StageState &state, StageExtraRunState &run,
 	bool quit_selected, StageExtraRunPresentation &presentation) noexcept
 {
 	if (run.phase != Stage1RunPhase::paused) return stage_extra_run_wait(run);

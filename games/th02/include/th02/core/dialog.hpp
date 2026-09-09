@@ -81,20 +81,20 @@ public:
 	virtual void page_access(std::size_t page) noexcept = 0;
 	virtual void egc_begin() noexcept = 0;
 	virtual void box_area_invalidate() noexcept = 0;
-	virtual void tiles_render(const Stage1State &state) noexcept = 0;
+	virtual void tiles_render(const StageState &state) noexcept = 0;
 	virtual void egc_end() noexcept = 0;
-	virtual void player_put(const Stage1State &state) noexcept = 0;
+	virtual void player_put(const StageState &state) noexcept = 0;
 	virtual void box_put(std::int16_t left, std::int16_t top, std::int16_t bottom) noexcept = 0;
 };
 
 // Actual dialog_pre/dialog_post state and delay schedule. Drawing requests
 // are not a pixel-fidelity implementation. Pre grants (but does not clear)
 // score_delta; post restores TM_NONE only when pre requested it.
-[[nodiscard]] DialogSlidePhase dialog_pre_begin(Stage1State &state, DialogState &dialog,
+[[nodiscard]] DialogSlidePhase dialog_pre_begin(StageState &state, DialogState &dialog,
 	DialogSlideState &slide, DialogSlidePresentation &presentation) noexcept;
-[[nodiscard]] DialogSlidePhase dialog_post_begin(const Stage1State &state,
+[[nodiscard]] DialogSlidePhase dialog_post_begin(const StageState &state,
 	DialogSlideState &slide, DialogSlidePresentation &presentation) noexcept;
-[[nodiscard]] DialogSlidePhase dialog_slide_after_delay(Stage1State &state,
+[[nodiscard]] DialogSlidePhase dialog_slide_after_delay(StageState &state,
 	DialogState &dialog, DialogSlideState &slide, DialogSlidePresentation &presentation) noexcept;
 
 } // namespace th02::core

@@ -3,7 +3,7 @@
 
 namespace th02::core {
 
-void stage1_notifications(Stage1State &state, bool &stage_title_enabled,
+void stage1_notifications(StageState &state, bool &stage_title_enabled,
 	bool demo, Stage1NotificationPresentation &presentation) noexcept
 {
 	presentation.sound_effects_update();
@@ -20,7 +20,7 @@ void stage1_notifications(Stage1State &state, bool &stage_title_enabled,
 	}
 }
 
-Stage1PreparationResult stage1_prepare(Stage1State &state,
+Stage1PreparationResult stage1_prepare(StageState &state,
 	Stage1InvalidationPresentation &invalidation,
 	Stage1PreparationPresentation &presentation) noexcept
 {

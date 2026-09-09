@@ -463,23 +463,28 @@ void tune_for_lunatic(BulletTemplate &bullet_template) noexcept
 	return false;
 }
 
+void gather_init(Gather &gather, const GatherTemplate &gather_template) noexcept
+{
+	gather.center.cur = gather_template.center;
+	gather.radius_cur = gather_template.radius;
+	gather.radius_prev = gather_template.radius;
+	gather.center.velocity = gather_template.velocity;
+	gather.angle_cur = 0U;
+	gather.angle_delta = gather_template.angle_delta;
+	gather.col = gather_template.col;
+	gather.ring_points = gather_template.ring_points;
+	gather.radius_delta = static_cast<std::int16_t>(
+		gather_template.radius / gather_frames
+	);
+}
+
 [[nodiscard]] bool gather_add_bullets(State &state) noexcept
 {
 	for(auto &gather : state.bullets.gathers) {
 		if(gather.flag != bullet_free) continue;
 		gather.flag = bullet_alive;
 		gather.bullet_template = state.bullets.template_;
-		gather.center.cur = state.bullets.gather_template.center;
-		gather.radius_cur = state.bullets.gather_template.radius;
-		gather.radius_prev = state.bullets.gather_template.radius;
-		gather.center.velocity = state.bullets.gather_template.velocity;
-		gather.angle_cur = 0U;
-		gather.angle_delta = state.bullets.gather_template.angle_delta;
-		gather.col = state.bullets.gather_template.col;
-		gather.ring_points = state.bullets.gather_template.ring_points;
-		gather.radius_delta = static_cast<std::int16_t>(
-			state.bullets.gather_template.radius / gather_frames
-		);
+		gather_init(gather, state.bullets.gather_template);
 		return true;
 	}
 	return true;
@@ -749,6 +754,43 @@ bool bullets_add(State &state, bool special, bool fixed_speed) noexcept
 	return true;
 }
 
+void gather_add_only(State &state) noexcept
+{
+	for(auto &gather : state.bullets.gathers) {
+		if(gather.flag != bullet_free) continue;
+		gather.flag = bullet_alive;
+		gather.bullet_template.spawn_type = static_cast<std::uint8_t>(
+			BulletSpawnType::gather_only
+		);
+		gather_init(gather, state.bullets.gather_template);
+		return;
+	}
+}
+
+void gather_add_only_3stack(
+	State &state,
+	std::int16_t frame,
+	std::uint8_t col_for_0,
+	std::uint8_t col_for_2_and_4
+) noexcept
+{
+	switch(frame) {
+	case 0:
+		state.bullets.gather_template.col = col_for_0;
+		gather_add_only(state);
+		return;
+	case 2:
+		state.bullets.gather_template.col = col_for_2_and_4;
+		gather_add_only(state);
+		return;
+	case 4:
+		gather_add_only(state);
+		return;
+	default:
+		return;
+	}
+}
+
 bool gathers_update(State &state) noexcept
 {
 	for(auto &gather : state.bullets.gathers) {
@@ -760,7 +802,7 @@ bool gathers_update(State &state) noexcept
 		(void)pc98::th0405::update_motion(gather.center);
 		gather.radius_prev = gather.radius_cur;
 		gather.radius_cur = word_sub(gather.radius_cur, gather.radius_delta);
-		++gather.angle_cur;
+		gather.angle_cur = byte_add(gather.angle_cur, gather.angle_delta);
 		if(gather.radius_cur < gather_radius_end) {
 			gather.flag = bullet_remove;
 			if(gather.bullet_template.spawn_type !=

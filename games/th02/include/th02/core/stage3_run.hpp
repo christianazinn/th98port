@@ -37,14 +37,14 @@ struct Stage3RunPresentation {
 // old-page scroll lines. Gameplay input is the already-sensed (or replay/demo
 // substituted) mask. Pause UI remains an explicit external boundary.
 [[nodiscard]] Stage1RunWait stage3_run_wait(const Stage3RunState &run) noexcept;
-[[nodiscard]] Stage1RunWait stage3_run_prepare(Stage1State &state,
+[[nodiscard]] Stage1RunWait stage3_run_prepare(StageState &state,
 	Stage3RunState &run, Stage3RunPresentation &presentation) noexcept;
-[[nodiscard]] Stage1RunWait stage3_run_input(Stage1State &state,
+[[nodiscard]] Stage1RunWait stage3_run_input(StageState &state,
 	Stage3RunState &run, std::uint16_t input, Stage3RunPresentation &presentation) noexcept;
-[[nodiscard]] Stage1RunWait stage3_run_after_delay(Stage1State &state,
+[[nodiscard]] Stage1RunWait stage3_run_after_delay(StageState &state,
 	Stage3RunState &run, Stage3RunPresentation &presentation) noexcept;
-[[nodiscard]] Stage1RunWait stage3_run_acknowledgement(Stage1State &state,
+[[nodiscard]] Stage1RunWait stage3_run_acknowledgement(StageState &state,
 	Stage3RunState &run, bool pressed, Stage3RunPresentation &presentation) noexcept;
-[[nodiscard]] Stage1RunWait stage3_run_after_pause(Stage1State &state,
+[[nodiscard]] Stage1RunWait stage3_run_after_pause(StageState &state,
 	Stage3RunState &run, bool quit_selected, Stage3RunPresentation &presentation) noexcept;
 } // namespace th02::core

@@ -6,7 +6,7 @@
 namespace th02::core {
 namespace {
 
-Stage1FramePhase score_tail(Stage1State &state, Stage1FrameSchedule &schedule,
+Stage1FramePhase score_tail(StageState &state, Stage1FrameSchedule &schedule,
 	Stage1FramePresentation &presentation) noexcept
 {
 	if ((state.stage_frame % 1800U) == 1500U &&
@@ -26,7 +26,7 @@ Stage1FramePhase score_tail(Stage1State &state, Stage1FrameSchedule &schedule,
 	return schedule.phase = Stage1FramePhase::complete;
 }
 
-Stage1FramePhase counters(Stage1State &state, Stage1FrameSchedule &schedule,
+Stage1FramePhase counters(StageState &state, Stage1FrameSchedule &schedule,
 	Stage1FramePresentation &presentation) noexcept
 {
 	state.resident_frame = std::bit_cast<std::int32_t>(
@@ -38,7 +38,7 @@ Stage1FramePhase counters(Stage1State &state, Stage1FrameSchedule &schedule,
 	return score_tail(state, schedule, presentation);
 }
 
-Stage1FramePhase scroll_and_flip(Stage1State &state, Stage1FrameSchedule &schedule,
+Stage1FramePhase scroll_and_flip(StageState &state, Stage1FrameSchedule &schedule,
 	Stage1FramePresentation &presentation) noexcept
 {
 	if (scroll_finish_frame(state.scroll, state.tiles, state.stage_data,
@@ -59,7 +59,7 @@ Stage1FramePhase scroll_and_flip(Stage1State &state, Stage1FrameSchedule &schedu
 
 } // namespace
 
-Stage1FramePhase stage1_frame_finish(Stage1State &state,
+Stage1FramePhase stage1_frame_finish(StageState &state,
 	Stage1FrameSchedule &schedule, Stage1FramePresentation &presentation) noexcept
 {
 	if (schedule.phase != Stage1FramePhase::entities_complete) return schedule.phase;
@@ -68,7 +68,7 @@ Stage1FramePhase stage1_frame_finish(Stage1State &state,
 	return scroll_and_flip(state, schedule, presentation);
 }
 
-Stage1FramePhase stage1_frame_resume(Stage1State &state,
+Stage1FramePhase stage1_frame_resume(StageState &state,
 	Stage1FrameSchedule &schedule, bool pause_quit,
 	Stage1FramePresentation &presentation) noexcept
 {
@@ -77,7 +77,7 @@ Stage1FramePhase stage1_frame_resume(Stage1State &state,
 	return scroll_and_flip(state, schedule, presentation);
 }
 
-Stage1FramePhase stage1_frame_after_boss_init(Stage1State &state,
+Stage1FramePhase stage1_frame_after_boss_init(StageState &state,
 	Stage1FrameSchedule &schedule, Stage1FramePresentation &presentation) noexcept
 {
 	if (schedule.phase != Stage1FramePhase::boss_init_pending) return schedule.phase;
@@ -92,7 +92,7 @@ Stage1FramePhase stage1_frame_after_boss_init(Stage1State &state,
 	return counters(state, schedule, presentation);
 }
 
-Stage1FramePhase stage1_frame_after_stage_end(Stage1State &state,
+Stage1FramePhase stage1_frame_after_stage_end(StageState &state,
 	Stage1FrameSchedule &schedule, Stage1FramePresentation &presentation) noexcept
 {
 	if (schedule.phase != Stage1FramePhase::stage_end_pending) return schedule.phase;

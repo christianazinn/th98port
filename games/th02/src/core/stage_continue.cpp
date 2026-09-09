@@ -14,7 +14,7 @@ constexpr std::uint16_t tile_render_height = 16U;
 } // namespace
 
 StageContinueResult stage1_continue_resume(
-	Stage1State &state, StageContinuePresentationCallbacks &presentation
+	StageState &state, StageContinuePresentationCallbacks &presentation
 ) noexcept
 {
 	presentation.hud_put();

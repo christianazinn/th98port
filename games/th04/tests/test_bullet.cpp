@@ -100,11 +100,49 @@ bool gather_release()
 		f.state.bullets.template_.spawn_type != static_cast<std::uint8_t>(BulletSpawnType::pellet)) {
 		return false;
 	}
-	for(int frame = 0; frame < 32; ++frame) {
+	if(!gathers_update(f.state) || f.state.bullets.gathers[0].angle_cur != 2U) {
+		return false;
+	}
+	for(int frame = 1; frame < 32; ++frame) {
 		if(!gathers_update(f.state)) return false;
 	}
 	return f.state.bullets.gathers[0].flag == bullet_remove &&
 		f.state.bullets.pool[239].flag == bullet_alive;
+}
+
+bool gather_only_full_pool()
+{
+	Fixture f;
+	f.state.bullets.gather_template = {{1200, 2000}, {16, -32}, 640, 7, 5U, 3U};
+	f.state.bullets.gathers[0].bullet_template.patnum = 71U;
+	gather_add_only(f.state);
+	const auto &added = f.state.bullets.gathers[0];
+	if(added.flag != bullet_alive ||
+		added.bullet_template.spawn_type != static_cast<std::uint8_t>(
+			BulletSpawnType::gather_only
+		) ||
+		added.bullet_template.patnum != 71U ||
+		added.center.cur != Point{1200, 2000} ||
+		added.center.velocity != Point{16, -32} ||
+		added.radius_cur != 640 || added.radius_prev != 640 ||
+		added.radius_delta != 20 || added.angle_cur != 0U ||
+		added.angle_delta != 3U || added.col != 5U || added.ring_points != 7) {
+		return false;
+	}
+	for(auto &gather : f.state.bullets.gathers) gather.flag = bullet_alive;
+	const auto before = f.state.bullets.gathers;
+	gather_add_only(f.state);
+	if(f.state.bullets.gathers != before) return false;
+	gather_add_only_3stack(f.state, 0, 9U, 13U);
+	if(f.state.bullets.gather_template.col != 9U || f.state.bullets.gathers != before) {
+		return false;
+	}
+	gather_add_only_3stack(f.state, 2, 9U, 13U);
+	if(f.state.bullets.gather_template.col != 13U || f.state.bullets.gathers != before) {
+		return false;
+	}
+	gather_add_only_3stack(f.state, 4, 9U, 13U);
+	return f.state.bullets.gathers == before;
 }
 
 bool graze_clear_special_and_zap()
@@ -179,6 +217,7 @@ int main()
 		std::pair{"tuning/regular", tuning_and_regular_spawning},
 		std::pair{"fixed speed/shared RNG", fixed_speed_and_shared_random},
 		std::pair{"gather release", gather_release},
+		std::pair{"gather-only/full pool", gather_only_full_pool},
 		std::pair{"graze/clear/special/zap", graze_clear_special_and_zap},
 	}) {
 		if(!test()) {

@@ -14,8 +14,8 @@ void require(bool condition, std::source_location at = std::source_location::cur
 	if (!condition) { std::fprintf(stderr, "end assertion failed: %u\n", at.line()); std::abort(); }
 }
 struct Sink final : Stage1EndPresentation, Stage1FramePresentation {
-	Stage1State &state;
-	explicit Sink(Stage1State &s) : state(s) {}
+	StageState &state;
+	explicit Sink(StageState &s) : state(s) {}
 	std::vector<int> events;
 	std::vector<std::int16_t> faces;
 	std::vector<std::array<std::uint8_t, 3>> cells;
@@ -28,9 +28,9 @@ struct Sink final : Stage1EndPresentation, Stage1FramePresentation {
 	void page_access(std::size_t page) noexcept override { pages.push_back(page); }
 	void egc_begin() noexcept override {}
 	void box_area_invalidate() noexcept override {}
-	void tiles_render(const Stage1State &) noexcept override {}
+	void tiles_render(const StageState &) noexcept override {}
 	void egc_end() noexcept override {}
-	void player_put(const Stage1State &) noexcept override {}
+	void player_put(const StageState &) noexcept override {}
 	void box_put(std::int16_t, std::int16_t, std::int16_t) noexcept override {}
 	void box_wipe() noexcept override { first_face = true; }
 	void face_put(std::int16_t face) noexcept override { if (first_face) { faces.push_back(face); first_face = false; } }
@@ -62,7 +62,7 @@ void complete_end(StageEndBoss kind, std::uint16_t continues = 0)
 	const bool meira = kind == StageEndBoss::meira;
 	const bool stones = kind == StageEndBoss::stones;
 	const bool marisa = kind == StageEndBoss::marisa;
-	Stage1State state{};
+	StageState state{};
 	Stage1EndState end{};
 	Sink sink{state};
 	state.dialog.box_current = marisa ? 35 : stones ? 8 : meira ? 24 : 16;
@@ -135,7 +135,7 @@ void complete_end(StageEndBoss kind, std::uint16_t continues = 0)
 
 void acknowledgement_requires_new_release()
 {
-	Stage1State state{};
+	StageState state{};
 	Stage1EndState end{};
 	Sink sink{state};
 	end.phase = Stage1EndPhase::bonus_acknowledgement;

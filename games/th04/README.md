@@ -5,8 +5,16 @@ The connected player path covers movement, all four shot types and their power
 levels, hit/deathbomb/miss handling, item collection, and both character bombs.
 `State` owns their source globals; `Presentation` only receives notifications.
 Enemy scripts, STD spawning, bullets/gathers and score transfer now operate on
-that same state. Boss logic, stage startup and the full stage loop remain
-unconnected. Passing synthetic tests does not establish replay parity.
+that same state. Stage 1 connects those to map scrolling, its midboss and Orange.
+Modal flows and later-stage bosses remain incomplete. Passing synthetic tests
+does not establish replay parity.
+
+`th04-headless --data DIR --demo2` exercises the original Stage 1 demo profile.
+`DIR` contains extracted ST00.STD, ST00.MAP and DEMO2.REC. Alternatively use
+`--input FILE` for low-byte input masks, one per tick, with `--rank`,
+`--character`, `--shot`, `--seed` and `--frames`; see `--help`. This tool is
+Stage-1-only, not a user replay verifier. It reports pause, dialog, Game Over
+and clear boundaries explicitly; it does not pretend missing modal logic ran.
 
 Movement input, word motion updates, and the player boundary clamp are implemented, sharing direction
 application with TH05. The source owner is th04/main/player/move.cpp at ReC98
@@ -80,7 +88,7 @@ source call site, before later hits and the final score update. The two-argument
 inspection form only reports requests and is not a full simulation. The
 four-argument form consumes the shared 96-slot spark pool and random ring at
 those call sites, with both borrowed states validated before any mutation. The
-enemy caller now uses this path; the boss callers remain unported. This is not a
+enemy and Stage 1 boss callers now use this path. This is not a
 complete replay engine. Invalid represented pool addresses fail explicitly.
 
 `core/score.hpp` implements th04/main/score_reset.cpp at the pinned donor:

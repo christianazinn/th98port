@@ -34,9 +34,9 @@ struct Event {
 
 class Recorder final : public StageContinuePresentationCallbacks {
 public:
-	explicit Recorder(const Stage1State &state_arg) noexcept : state(&state_arg) {}
+	explicit Recorder(const StageState &state_arg) noexcept : state(&state_arg) {}
 
-	const Stage1State *state{};
+	const StageState *state{};
 	std::array<Event, 8U> events{};
 	std::size_t count{};
 	bool tile_callbacks_saw_source_prefix{true};
@@ -77,9 +77,9 @@ private:
 	}
 };
 
-[[nodiscard]] Stage1State warm_state() noexcept
+[[nodiscard]] StageState warm_state() noexcept
 {
-	Stage1State state{};
+	StageState state{};
 	state.frame.page_front = 0U;
 	state.frame.page_back = 1U;
 	state.frame.player.on_page = {{{11, 12}, {13, 14}}};

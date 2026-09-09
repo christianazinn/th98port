@@ -13,7 +13,7 @@ constexpr std::array<std::uint8_t, 16> faces{0, 96, 51, 96, 9, 96, 0, 96,
 	99, 99, 48, 12, 99, 99, 6, 99};
 constexpr std::array<std::uint8_t, 8> stones_faces{6, 96, 96, 12, 96, 51, 96, 0};
 
-Stage1IntroWait advance(Stage1State &state, Stage1IntroState &intro,
+Stage1IntroWait advance(StageState &state, Stage1IntroState &intro,
 	Stage1IntroPresentation &presentation) noexcept
 {
 	const std::span<const std::uint8_t> sequence = intro.stones ?
@@ -70,7 +70,7 @@ Stage1IntroWait stage1_intro_wait(const Stage1IntroState &intro) noexcept
 	return Stage1IntroWait::refused;
 }
 
-Stage1IntroWait stage1_intro_begin(Stage1State &state, Stage1IntroState &intro,
+Stage1IntroWait stage1_intro_begin(StageState &state, Stage1IntroState &intro,
 	Stage1IntroPresentation &presentation) noexcept
 {
 	intro = {};
@@ -92,7 +92,7 @@ Stage1IntroWait stage3_intro_begin(StageState &state, Stage1IntroState &intro,
 	return advance(state, intro, presentation);
 }
 
-Stage1IntroWait stage1_intro_after_delay(Stage1State &state, Stage1IntroState &intro,
+Stage1IntroWait stage1_intro_after_delay(StageState &state, Stage1IntroState &intro,
 	Stage1IntroPresentation &presentation) noexcept
 {
 	if (intro.phase == Stage1IntroPhase::pre_slide || intro.phase == Stage1IntroPhase::post_slide)
@@ -101,7 +101,7 @@ Stage1IntroWait stage1_intro_after_delay(Stage1State &state, Stage1IntroState &i
 	return advance(state, intro, presentation);
 }
 
-Stage1IntroWait stage1_intro_input(Stage1State &state, Stage1IntroState &intro,
+Stage1IntroWait stage1_intro_input(StageState &state, Stage1IntroState &intro,
 	std::uint16_t input, Stage1IntroPresentation &presentation) noexcept
 {
 	if (intro.phase == Stage1IntroPhase::boxes && intro.box.phase == DialogBoxPhase::input_sample) {
@@ -111,7 +111,7 @@ Stage1IntroWait stage1_intro_input(Stage1State &state, Stage1IntroState &intro,
 	return advance(state, intro, presentation);
 }
 
-Stage1IntroWait stage1_intro_acknowledgement(Stage1State &state, Stage1IntroState &intro,
+Stage1IntroWait stage1_intro_acknowledgement(StageState &state, Stage1IntroState &intro,
 	bool pressed, Stage1IntroPresentation &presentation) noexcept
 {
 	if (intro.phase == Stage1IntroPhase::boxes)

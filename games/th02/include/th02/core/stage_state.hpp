@@ -144,16 +144,16 @@ struct Stage1EntitiesPresentation {
 // borrowed references can outlive its call, and no state is reset, advanced,
 // or otherwise initialized merely by forming an adapter.
 [[nodiscard]] Stage1InvalidationResult stage1_invalidate(
-	Stage1State &state, Stage1InvalidationPresentation &presentation
+	StageState &state, Stage1InvalidationPresentation &presentation
 ) noexcept;
 
 [[nodiscard]] PlayerBombUpdateOutcome player_move_and_bomb_update(
-	Stage1State &state, BombAnimationCallbacks &animation_callbacks,
+	StageState &state, BombAnimationCallbacks &animation_callbacks,
 	BombPresentationCallbacks &bomb_callbacks
 ) noexcept;
 
 [[nodiscard]] Stage1EntitiesStepResult stage1_entities_update(
-	Stage1State &state, Stage1EntitiesPresentation &presentation
+	StageState &state, Stage1EntitiesPresentation &presentation
 ) noexcept;
 
 [[nodiscard]] Stage2EntitiesStepResult stage2_entities_update(

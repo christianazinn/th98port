@@ -37,14 +37,14 @@ struct StageExtraRunPresentation {
 // old-page scroll lines. Gameplay input is the already-sensed (or replay/demo
 // substituted) mask. Pause UI remains an explicit external boundary.
 [[nodiscard]] Stage1RunWait stage_extra_run_wait(const StageExtraRunState &run) noexcept;
-[[nodiscard]] Stage1RunWait stage_extra_run_prepare(Stage1State &state,
+[[nodiscard]] Stage1RunWait stage_extra_run_prepare(StageState &state,
 	StageExtraRunState &run, StageExtraRunPresentation &presentation) noexcept;
-[[nodiscard]] Stage1RunWait stage_extra_run_input(Stage1State &state,
+[[nodiscard]] Stage1RunWait stage_extra_run_input(StageState &state,
 	StageExtraRunState &run, std::uint16_t input, StageExtraRunPresentation &presentation) noexcept;
-[[nodiscard]] Stage1RunWait stage_extra_run_after_delay(Stage1State &state,
+[[nodiscard]] Stage1RunWait stage_extra_run_after_delay(StageState &state,
 	StageExtraRunState &run, StageExtraRunPresentation &presentation) noexcept;
-[[nodiscard]] Stage1RunWait stage_extra_run_acknowledgement(Stage1State &state,
+[[nodiscard]] Stage1RunWait stage_extra_run_acknowledgement(StageState &state,
 	StageExtraRunState &run, bool pressed, StageExtraRunPresentation &presentation) noexcept;
-[[nodiscard]] Stage1RunWait stage_extra_run_after_pause(Stage1State &state,
+[[nodiscard]] Stage1RunWait stage_extra_run_after_pause(StageState &state,
 	StageExtraRunState &run, bool quit_selected, StageExtraRunPresentation &presentation) noexcept;
 } // namespace th02::core

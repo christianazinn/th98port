@@ -13,9 +13,9 @@ void require(bool value, const std::source_location where = std::source_location
 	if (!value) { std::fprintf(stderr, "stage1 frame assertion failed: %u\n", where.line()); std::abort(); }
 }
 struct Sink final : Stage1FramePresentation {
-	Stage1State &state;
+	StageState &state;
 	std::vector<int> events;
-	explicit Sink(Stage1State &s) : state(s) {}
+	explicit Sink(StageState &s) : state(s) {}
 	void copy_line(const TileLineCopy &) noexcept override { events.push_back(1); }
 	void egc_begin() noexcept override { events.push_back(2); }
 	void egc_end() noexcept override { events.push_back(3); }
@@ -34,7 +34,7 @@ struct Sink final : Stage1FramePresentation {
 
 void paused_tail()
 {
-	Stage1State state{};
+	StageState state{};
 	Stage1FrameSchedule schedule{};
 	Sink sink{state};
 	state.input = 0x40;
@@ -60,7 +60,7 @@ void paused_tail()
 
 void activation_boundary()
 {
-	Stage1State state{};
+	StageState state{};
 	Stage1FrameSchedule schedule{};
 	Sink sink{state};
 	state.scroll.done = true;
@@ -85,7 +85,7 @@ void activation_boundary()
 
 void end_boundary(bool quit)
 {
-	Stage1State state{};
+	StageState state{};
 	Stage1FrameSchedule schedule{};
 	Sink sink{state};
 	schedule.boss_activation_enabled = false;
@@ -107,7 +107,7 @@ void end_boundary(bool quit)
 
 void wrap_and_refusal()
 {
-	Stage1State state{};
+	StageState state{};
 	Stage1FrameSchedule schedule{};
 	Sink sink{state};
 	state.resident_frame = std::numeric_limits<std::int32_t>::max();
@@ -126,7 +126,7 @@ void wrap_and_refusal()
 
 void final_scroll()
 {
-	Stage1State state{};
+	StageState state{};
 	Stage1FrameSchedule schedule{};
 	Sink sink{state};
 	state.scroll.line = 271;

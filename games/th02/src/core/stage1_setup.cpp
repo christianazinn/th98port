@@ -3,7 +3,7 @@
 
 namespace th02::core {
 
-void gameplay_options_apply(Stage1State &state, bool reduce_effects,
+void gameplay_options_apply(StageState &state, bool reduce_effects,
 	std::uint16_t continues_used) noexcept
 {
 	state.reduce_effects = reduce_effects;
@@ -59,7 +59,7 @@ bool stage_setup_before_assets(StageState &state, bool demo,
 }
 } // namespace
 
-bool stage1_setup_before_assets(Stage1State &state, bool demo,
+bool stage1_setup_before_assets(StageState &state, bool demo,
 	Stage1SetupPresentation &presentation) noexcept
 {
 	return state.stage_id == 0U && stage_setup_before_assets(state, demo, presentation);
@@ -92,7 +92,7 @@ void stage4_setup_after_assets(StageState &state, Stage1FrameSchedule &schedule,
 	state.scroll.interval = 1;
 }
 
-void stage1_setup_after_assets(Stage1State &state, Stage1FrameSchedule &schedule,
+void stage1_setup_after_assets(StageState &state, Stage1FrameSchedule &schedule,
 	bool &stage_title_enabled) noexcept
 {
 	state.boss_enabled = false;
@@ -118,7 +118,7 @@ void stage2_setup_after_assets(StageState &state, Stage1FrameSchedule &schedule,
 	stage1_setup_after_assets(state, schedule, stage_title_enabled);
 }
 
-bool stage1_setup_items_and_score(Stage1State &state,
+bool stage1_setup_items_and_score(StageState &state,
 	ItemScheduleCallbacks &presentation) noexcept
 {
 	items_init_and_reset(state.items, state.item_lifecycle, state.random, presentation);

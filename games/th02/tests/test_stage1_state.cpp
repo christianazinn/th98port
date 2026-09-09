@@ -59,7 +59,7 @@ public:
 	void music_play() noexcept override {}
 	void graph_scrollup(std::int16_t) noexcept override {}
 	void box_area_invalidate() noexcept override {}
-	void player_put(const Stage1State &) noexcept override {}
+	void player_put(const StageState &) noexcept override {}
 	void box_put(std::int16_t, std::int16_t, std::int16_t) noexcept override {}
 	void box_wipe() noexcept override {}
 	void face_put(std::int16_t) noexcept override {}
@@ -83,7 +83,7 @@ public:
 	void score_events(const ScoreEvents &) noexcept override {}
 	void background_particles_reset() noexcept override {}
 	void sound_effects_reset() noexcept override {}
-	const Stage1State *observed_state{};
+	const StageState *observed_state{};
 	std::int16_t tile_line{};
 	std::int16_t tile_midboss{};
 	std::int16_t tile_spawn_row{};
@@ -97,7 +97,7 @@ public:
 	void palette_tone_set(std::uint16_t) noexcept override {}
 	void grc_set_clip(std::int16_t, std::int16_t, std::int16_t, std::int16_t) noexcept override {}
 	void dot_square(ScreenPoint point, std::uint8_t) noexcept override { scenery_dot = point; }
-	void tiles_render(const Stage1State &state) noexcept override {
+	void tiles_render(const StageState &state) noexcept override {
 		observed_state = &state;
 		tile_line = state.scroll.line;
 		tile_midboss = state.midboss_active;
@@ -190,7 +190,7 @@ public:
 	return {trace, trace, trace, trace, trace, trace, trace};
 }
 
-void set_valid_pages(Stage1State &state) noexcept
+void set_valid_pages(StageState &state) noexcept
 {
 	state.frame.page_front = 0U;
 	state.frame.page_back = 1U;
@@ -201,7 +201,7 @@ void set_valid_pages(Stage1State &state) noexcept
 
 [[nodiscard]] bool test_invalidation_overload_borrows_one_state() noexcept
 {
-	Stage1State state{};
+	StageState state{};
 	set_valid_pages(state);
 	state.boss_enabled = false;
 	state.enemies_enabled = false;
@@ -219,7 +219,7 @@ void set_valid_pages(Stage1State &state) noexcept
 
 [[nodiscard]] bool test_player_bomb_overload_uses_canonical_boss_and_frame() noexcept
 {
-	Stage1State state{};
+	StageState state{};
 	set_valid_pages(state);
 	state.boss.target = {180, 100};
 	state.player_hit.raw_hit = 1U;
@@ -257,7 +257,7 @@ void set_valid_pages(Stage1State &state) noexcept
 
 [[nodiscard]] bool test_entities_overload_builds_local_adapters() noexcept
 {
-	Stage1State state{};
+	StageState state{};
 	set_valid_pages(state);
 	state.boss.target = {77, 88};
 	state.enemy_target_projection.boss_position = {11, 12};
@@ -280,7 +280,7 @@ void set_valid_pages(Stage1State &state) noexcept
 
 [[nodiscard]] bool test_enabled_enemy_rejects_invalid_projection_before_context() noexcept
 {
-	Stage1State state{};
+	StageState state{};
 	set_valid_pages(state);
 	state.enemies_enabled = true;
 	state.stage_data.template_count = -1;
@@ -296,7 +296,7 @@ void set_valid_pages(Stage1State &state) noexcept
 
 [[nodiscard]] bool test_prepare_old_page_and_activation(bool stage2) noexcept
 {
-	Stage1State state{};
+	StageState state{};
 	set_valid_pages(state);
 	scroll_reset(state.scroll);
 	state.scroll.line = 200;
@@ -336,7 +336,7 @@ void set_valid_pages(Stage1State &state) noexcept
 
 [[nodiscard]] bool test_prepare_interval_refusal_prefix() noexcept
 {
-	Stage1State state{};
+	StageState state{};
 	set_valid_pages(state);
 	state.scroll.line = 200;
 	state.scroll_line_on_page[1] = 37;
@@ -360,7 +360,7 @@ void set_valid_pages(Stage1State &state) noexcept
 		void bgm_title_show(std::uint8_t title) noexcept override { calls.push_back(10 + title); }
 		void bgm_title_clear() noexcept override { calls.push_back(3); }
 	} sink;
-	Stage1State state{};
+	StageState state{};
 	bool title_enabled = true;
 	state.stage_frame = 160;
 	state.bgm_show_timer = 1;
@@ -380,7 +380,7 @@ void set_valid_pages(Stage1State &state) noexcept
 
 [[nodiscard]] bool test_setup_retains_and_sequences(bool stage2) noexcept
 {
-	Stage1State state{};
+	StageState state{};
 	state.stage_id = stage2 ? 1 : 0;
 	state.stage2_scenery_setup = 1;
 	state.stage2_scenery_frame = 700;
@@ -427,7 +427,7 @@ void set_valid_pages(Stage1State &state) noexcept
 
 [[nodiscard]] bool test_setup_options_and_demo() noexcept
 {
-	Stage1State state{};
+	StageState state{};
 	state.score.score = 123;
 	state.items.bigpower_override = 8;
 	gameplay_options_apply(state, true, 0);
@@ -450,7 +450,7 @@ void set_valid_pages(Stage1State &state) noexcept
 {
 	// A minimal decoded empty-map fixture, not a replay or original asset set.
 	// Every gameplay call below is concrete; only output sinks are inert.
-	Stage1State state{};
+	StageState state{};
 	Stage1FrameSchedule schedule{};
 	Trace trace{};
 	bool title_enabled = false;
@@ -479,7 +479,7 @@ void set_valid_pages(Stage1State &state) noexcept
 
 [[nodiscard]] bool test_initial_tile_ring() noexcept
 {
-	Stage1State state{};
+	StageState state{};
 	Trace trace{};
 	state.stage_data.map_length = 3;
 	state.stage_data.map[0] = 0;
@@ -501,7 +501,7 @@ void set_valid_pages(Stage1State &state) noexcept
 
 [[nodiscard]] bool test_run_driver() noexcept
 {
-	Stage1State state{};
+	StageState state{};
 	Stage1RunState run{};
 	Trace trace{};
 	auto invalidation = invalidation_presentation(trace);
@@ -571,7 +571,7 @@ void set_valid_pages(Stage1State &state) noexcept
 
 [[nodiscard]] bool test_stage2_run_driver() noexcept
 {
-	Stage1State state{};
+	StageState state{};
 	Stage2RunState run{};
 	Trace trace{};
 	auto old_invalidation = invalidation_presentation(trace);
@@ -644,7 +644,7 @@ void set_valid_pages(Stage1State &state) noexcept
 
 [[nodiscard]] bool test_stage3_run_driver() noexcept
 {
-	Stage1State state{};
+	StageState state{};
 	Stage3RunState run{};
 	Trace trace{};
 	auto old_invalidation = invalidation_presentation(trace);
@@ -717,7 +717,7 @@ void set_valid_pages(Stage1State &state) noexcept
 
 [[nodiscard]] bool test_run_early_quit_and_refusal() noexcept
 {
-	Stage1State state{};
+	StageState state{};
 	Stage1RunState run{};
 	Trace trace{};
 	auto invalidation = invalidation_presentation(trace);

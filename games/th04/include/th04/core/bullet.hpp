@@ -194,6 +194,20 @@ struct BulletState {
 	State &state, bool special = false, bool fixed_speed = false
 ) noexcept;
 
+// th04/main/gather.cpp. The source only writes the gather-only spawn byte in
+// a reused slot before initializing the visible circle state. A full pool is
+// a source-valid no-op.
+void gather_add_only(State &state) noexcept;
+
+// th04/main/gather.cpp. Source frame values other than 0, 2, and 4 are
+// no-ops. At 0 and 2 it first persists the supplied template color.
+void gather_add_only_3stack(
+	State &state,
+	std::int16_t frame,
+	std::uint8_t col_for_0,
+	std::uint8_t col_for_2_and_4
+) noexcept;
+
 // th04/main/gather.cpp's simulation half. It fires a stored template through
 // the ordinary regular spawn path when a circle reaches its final radius.
 [[nodiscard]] bool gathers_update(State &state) noexcept;

@@ -34,7 +34,7 @@ void overlay_put(const Stage1EndState &end, Stage1EndPresentation &presentation)
 	}
 }
 
-void bonus_begin(Stage1State &state, Stage1EndState &end,
+void bonus_begin(StageState &state, Stage1EndState &end,
 	Stage1EndPresentation &presentation) noexcept
 {
 	presentation.overlay_wipe();
@@ -62,7 +62,7 @@ void bonus_begin(Stage1State &state, Stage1EndState &end,
 	acknowledgement_begin(end);
 }
 
-Stage1EndWait advance(Stage1State &state, Stage1EndState &end,
+Stage1EndWait advance(StageState &state, Stage1EndState &end,
 	Stage1EndPresentation &presentation) noexcept
 {
 	const std::span<const std::uint8_t> sequence = end.boss == StageEndBoss::sigma ? std::span<const std::uint8_t>(sigma_faces) : end.boss == StageEndBoss::marisa ?
@@ -125,7 +125,7 @@ Stage1EndWait stage1_end_wait(const Stage1EndState &end) noexcept
 	return Stage1EndWait::refused;
 }
 
-Stage1EndWait stage1_end_begin(Stage1State &state, Stage1EndState &end,
+Stage1EndWait stage1_end_begin(StageState &state, Stage1EndState &end,
 	Stage1EndPresentation &presentation) noexcept
 {
 	end = {};
@@ -144,7 +144,7 @@ Stage1EndWait stage4_end_begin(StageState &state, Stage1EndState &end,
 	return advance(state, end, presentation);
 }
 
-Stage1EndWait stage1_end_after_delay(Stage1State &state, Stage1EndState &end,
+Stage1EndWait stage1_end_after_delay(StageState &state, Stage1EndState &end,
 	Stage1EndPresentation &presentation) noexcept
 {
 	if (end.phase == Stage1EndPhase::pre_slide)
@@ -195,7 +195,7 @@ Stage1EndWait stage3_end_begin(StageState &state, Stage1EndState &end,
 	return advance(state, end, presentation);
 }
 
-Stage1EndWait stage1_end_input(Stage1State &state, Stage1EndState &end,
+Stage1EndWait stage1_end_input(StageState &state, Stage1EndState &end,
 	std::uint16_t input, Stage1EndPresentation &presentation) noexcept
 {
 	if (end.phase == Stage1EndPhase::boxes && end.box.phase == DialogBoxPhase::input_sample) {
@@ -205,7 +205,7 @@ Stage1EndWait stage1_end_input(Stage1State &state, Stage1EndState &end,
 	return advance(state, end, presentation);
 }
 
-Stage1EndWait stage1_end_acknowledgement(Stage1State &state, Stage1EndState &end,
+Stage1EndWait stage1_end_acknowledgement(StageState &state, Stage1EndState &end,
 	bool pressed, Stage1EndPresentation &presentation) noexcept
 {
 	if (end.phase == Stage1EndPhase::boxes)

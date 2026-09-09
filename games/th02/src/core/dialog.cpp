@@ -27,7 +27,7 @@ std::int16_t scrolled(std::int16_t top, std::int16_t delta) noexcept
 	return top;
 }
 
-void slide_begin(const Stage1State &state, DialogSlideState &slide, bool post) noexcept
+void slide_begin(const StageState &state, DialogSlideState &slide, bool post) noexcept
 {
 	const auto top = scrolled(320, state.scroll.line);
 	slide = {DialogSlidePhase::delay_one_frame,
@@ -96,7 +96,7 @@ DialogBoxPhase dialog_box_acknowledgement(DialogState &dialog,
 	return box.phase = DialogBoxPhase::acknowledgement_first_sample;
 }
 
-DialogSlidePhase dialog_pre_begin(Stage1State &state, DialogState &dialog,
+DialogSlidePhase dialog_pre_begin(StageState &state, DialogState &dialog,
 	DialogSlideState &slide, DialogSlidePresentation &presentation) noexcept
 {
 	presentation.overlay_wipe();
@@ -114,7 +114,7 @@ DialogSlidePhase dialog_pre_begin(Stage1State &state, DialogState &dialog,
 	return slide.phase;
 }
 
-DialogSlidePhase dialog_post_begin(const Stage1State &state,
+DialogSlidePhase dialog_post_begin(const StageState &state,
 	DialogSlideState &slide, DialogSlidePresentation &presentation) noexcept
 {
 	presentation.overlay_wipe();
@@ -122,7 +122,7 @@ DialogSlidePhase dialog_post_begin(const Stage1State &state,
 	return slide.phase;
 }
 
-DialogSlidePhase dialog_slide_after_delay(Stage1State &state, DialogState &dialog,
+DialogSlidePhase dialog_slide_after_delay(StageState &state, DialogState &dialog,
 	DialogSlideState &slide, DialogSlidePresentation &presentation) noexcept
 {
 	if (slide.phase != DialogSlidePhase::delay_one_frame) return slide.phase;
