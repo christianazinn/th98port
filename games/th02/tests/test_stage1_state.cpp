@@ -1,5 +1,6 @@
 #include "th02/core/stage1_state.hpp"
 #include "th02/core/stage1_prepare.hpp"
+#include "th02/core/stage1_setup.hpp"
 
 #include <cstdlib>
 #include <vector>
@@ -15,8 +16,24 @@ class Trace final : public EnemyUpdateCallbacks, public RikaCallbacks,
 	public SparkInvalidationCallbacks, public BombAnimationCallbacks,
 	public BombPresentationCallbacks, public PlayerMissPresentationCallbacks,
 	public ItemLifecyclePresentationCallbacks, public LaserUpdateCallbacks,
-	public EnemyBulletPresentationCallbacks, public Stage1PreparationPresentation {
+	public EnemyBulletPresentationCallbacks, public Stage1PreparationPresentation,
+	public Stage1SetupPresentation, public Stage1FramePresentation, public TileInitialCallbacks {
 public:
+	unsigned initial_rows{};
+	std::int16_t last_initial_top{};
+	void put_initial_row(std::int16_t top, const TileSectionRow &) noexcept override {
+		++initial_rows;
+		last_initial_top = top;
+	}
+	void copy_line(const TileLineCopy &) noexcept override {}
+	void egc_end() noexcept override {}
+	void graph_scroll(ScrollPresentation) noexcept override {}
+	void wait_for_presentation(std::uint8_t) noexcept override {}
+	void page_show(std::size_t) noexcept override {}
+	void page_access(std::size_t) noexcept override {}
+	void score_events(const ScoreEvents &) noexcept override {}
+	void background_particles_reset() noexcept override {}
+	void sound_effects_reset() noexcept override {}
 	const Stage1State *observed_state{};
 	std::int16_t tile_line{};
 	std::int16_t tile_midboss{};
@@ -280,6 +297,118 @@ void set_valid_pages(Stage1State &state) noexcept
 	return !title_enabled && state.bgm_show_timer == 0 && sink.calls == std::vector<int>({1});
 }
 
+[[nodiscard]] bool test_setup_retains_and_sequences() noexcept
+{
+	Stage1State state{};
+	state.random.cursor = 7;
+	state.rank = 3;
+	state.shottype = 1;
+	state.frame.player.current = {90, 91};
+	state.midboss.scenery_frame = 1002;
+	state.midboss.defeat_frame = 9;
+	state.rika.defeat_frame = 12;
+	state.sparks.ring_index = 23;
+	state.spark_parameters.acceleration_x = -1;
+	state.resident_frame = 500;
+	state.player_stream.stream_a_phase = 17;
+	state.boss.target = {70, 80};
+	Trace trace{};
+	if (!stage1_setup_before_assets(state, false, trace)) return false;
+	// Independent arithmetic from master.lib's LCG, 128 spark draws followed
+	// by 256 ring draws. Literals catch swapped or omitted initializer calls.
+	if (state.random.seed != 2418387584U || state.random.ring[0] != 180 ||
+		state.random.ring[7] != 7 || state.random.ring[255] != 37 || state.random.cursor != 7) return false;
+	if (state.frame.player.on_page[0] != ScreenPoint{208, 336} ||
+		state.frame.player.current != ScreenPoint{90, 91} ||
+		state.midboss.scenery_frame != 1002 || state.midboss.defeat_frame != 9 ||
+		state.rika.defeat_frame != 12 || state.sparks.ring_index != 23 ||
+		state.resident_frame != 500 || state.spark_parameters.acceleration_x != -1 ||
+		state.spark_parameters.age_max != 48 || state.spark_sprite_interval != 1 ||
+		state.bullets.rank_base_speed != 12 || state.bullets.stack != 1) return false;
+	Stage1FrameSchedule schedule{};
+	bool title_enabled = false;
+	stage1_setup_after_assets(state, schedule, title_enabled);
+	if (state.boss.target != ScreenPoint{-1, -1} || state.player_stream.stream_a_phase != 17 ||
+		!title_enabled || !state.enemies_enabled || state.boss_enabled || state.lasers_enabled) return false;
+	if (!stage1_setup_items_and_score(state, trace)) return false;
+	return state.random.cursor == 8 && state.items.semirandom_ring_p == 7 &&
+		state.midboss.scenery_frame == 1002 && state.resident_frame == 500;
+}
+
+[[nodiscard]] bool test_setup_options_and_demo() noexcept
+{
+	Stage1State state{};
+	state.score.score = 123;
+	state.items.bigpower_override = 8;
+	gameplay_options_apply(state, true, 0);
+	if (state.score.score != 123 || state.items.bigpower_override != 8 || state.playperf_max != 4) return false;
+	state.stage_id = 4;
+	state.rank = 1;
+	gameplay_options_apply(state, true, 256);
+	if (state.score.score != 9 || state.items.bigpower_override != 6 || state.playperf_max != 16) return false;
+	Trace trace{};
+	if (stage1_setup_before_assets(state, true, trace) || state.random.seed != 0) return false;
+	state.stage_id = 0;
+	state.bgm_title_id = 33;
+	state.boss_bgm_title_id = 34;
+	return stage1_setup_before_assets(state, true, trace) && state.bgm_show_timer == 0 &&
+		state.bgm_title_id == 33 && state.boss_bgm_title_id == 34 &&
+		state.spark_sprite_interval == 7 && state.spark_parameters.age_max == 24;
+}
+
+[[nodiscard]] bool test_connected_frame() noexcept
+{
+	// A minimal decoded empty-map fixture, not a replay or original asset set.
+	// Every gameplay call below is concrete; only output sinks are inert.
+	Stage1State state{};
+	Stage1FrameSchedule schedule{};
+	Trace trace{};
+	bool title_enabled = false;
+	state.max_enemy_vm_steps = 64;
+	if (!stage1_setup_before_assets(state, false, trace)) return false;
+	state.stage_data.map_length = 4;
+	tiles_stuff_reset(state.tiles, state.frame.page_back, state.tile_mode, state.tiles_egc_render_all);
+	stage1_setup_after_assets(state, schedule, title_enabled);
+	if (!stage1_setup_items_and_score(state, trace)) return false;
+	if (tiles_fill_and_put_initial(state.tiles, state.stage_data, state.tile_sections, trace) != TileScrollResult::completed) return false;
+	state.frame.page_front = 1;
+	state.frame.page_back = 0;
+	auto invalidation = invalidation_presentation(trace);
+	auto entities = entities_presentation(trace);
+	if (stage1_prepare(state, invalidation, trace) != Stage1PreparationResult::input_pending) return false;
+	state.input = 0;
+	const auto player = player_move_and_bomb_update(state, trace, trace);
+	if (!player.bomb_update_called || player.player_result != PlayerFrameResult::completed) return false;
+	if (stage1_entities_update(state, entities).result != Stage1EntitiesResult::completed) return false;
+	if (stage1_frame_finish(state, schedule, trace) != Stage1FramePhase::complete) return false;
+	return state.stage_frame == 1 && state.resident_frame == 1 && state.scroll.line == 399 &&
+		state.scroll.cycle == 1 && state.frame.page_front == 0 && state.frame.page_back == 1 &&
+		state.frame.player.current == ScreenPoint{208, 336} && state.random.cursor == 1 &&
+		state.item_lifecycle.frame_unused == 1;
+}
+
+[[nodiscard]] bool test_initial_tile_ring() noexcept
+{
+	Stage1State state{};
+	Trace trace{};
+	state.stage_data.map_length = 3;
+	state.stage_data.map[0] = 0;
+	state.stage_data.map[1] = 1;
+	state.stage_data.map[2] = 2;
+	state.tiles.tile_ring[24].fill(99);
+	for (std::size_t section = 0; section < 3; ++section)
+		for (std::size_t row = 0; row < 8; ++row)
+			state.tile_sections[section][row].fill(static_cast<std::uint8_t>(section * 8 + row));
+	if (tiles_fill_and_put_initial(state.tiles, state.stage_data, state.tile_sections, trace) != TileScrollResult::completed) return false;
+	if (trace.initial_rows != 24 || trace.last_initial_top != 0 || state.tiles.tile_ring[24][0] != 99) return false;
+	for (std::size_t row = 0; row < 24; ++row)
+		if (state.tiles.tile_ring[row][0] != 23U - row) return false;
+	state.stage_data.map[1] = 255;
+	trace.initial_rows = 0;
+	return tiles_fill_and_put_initial(state.tiles, state.stage_data, state.tile_sections, trace) ==
+		TileScrollResult::invalid_native_reference && trace.initial_rows == 8;
+}
+
 } // namespace
 
 int main()
@@ -289,7 +418,9 @@ int main()
 		!test_entities_overload_builds_local_adapters() ||
 		!test_enabled_enemy_rejects_invalid_projection_before_context() ||
 		!test_prepare_old_page_and_activation() ||
-		!test_prepare_interval_refusal_prefix() || !test_notifications()) {
+		!test_prepare_interval_refusal_prefix() || !test_notifications() ||
+		!test_setup_retains_and_sequences() || !test_setup_options_and_demo() ||
+		!test_connected_frame() || !test_initial_tile_ring()) {
 		return EXIT_FAILURE;
 	}
 	return EXIT_SUCCESS;

@@ -442,3 +442,11 @@ midboss activation and current-page scroll preparation before input. Its
 notification prelude preserves the title callback retirement and byte-sized
 BGM clock. The caller still supplies actual input and runs the concrete entity
 and frame-tail passes; tile rasterization is only a presentation request.
+
+`core/stage1_setup.hpp` connects the represented gameplay setup across actual
+asset-loading boundaries, including spark seeding before random-ring fill,
+partial resets and the later item/score setup. Initial tile-ring filling is
+available in `core/tile_scroll.hpp`, retaining the source's unused final row.
+`core/stage_continue.hpp` restores a continued player and clears bullets in
+source order without resetting the whole stage. Assets, dialogue and final
+presentation setup are still explicit dependencies, not successful no-op loads.

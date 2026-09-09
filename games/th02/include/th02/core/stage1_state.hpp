@@ -39,6 +39,7 @@ struct Stage1State {
 	ItemLifecycleState item_lifecycle{};
 	SparkPoolState sparks{};
 	SparkUpdateParameters spark_parameters{};
+	std::uint8_t spark_sprite_interval{};
 	EnemyBulletPoolState bullets{};
 	EnemyBulletSpecialState bullet_special{};
 	LaserPoolState lasers{};

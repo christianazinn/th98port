@@ -72,6 +72,23 @@ void tiles_stuff_reset(TileScrollState &state, std::size_t &page_back,
 	tiles_egc_render_all = false;
 }
 
+TileScrollResult tiles_fill_and_put_initial(TileScrollState &state,
+	const EnemyStageData &stage, const TileSectionTiles &sections,
+	TileInitialCallbacks &callbacks) noexcept
+{
+	for (std::size_t row = 0; row < 24U; ++row) {
+		const auto map_index = row / tile_scroll_rows_per_section;
+		if (stage.map_length < 0 || map_index >= static_cast<std::size_t>(stage.map_length))
+			return TileScrollResult::invalid_native_reference;
+		const auto section = static_cast<std::size_t>(stage.map[map_index]);
+		if (section >= sections.size()) return TileScrollResult::invalid_native_reference;
+		const auto &images = sections[section][row % tile_scroll_rows_per_section];
+		callbacks.put_initial_row(static_cast<std::int16_t>(368 - static_cast<int>(row) * 16), images);
+		state.tile_ring[23U - row] = images;
+	}
+	return TileScrollResult::completed;
+}
+
 TileScrollResult tiles_scroll_and_egc_render_both(
 	TileScrollState &state, const EnemyStageData &stage,
 	const TileSectionTiles &section_tiles, std::int16_t scroll_line,

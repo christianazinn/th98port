@@ -60,6 +60,19 @@ public:
 	virtual void copy_line(const TileLineCopy &request) noexcept = 0;
 };
 
+class TileInitialCallbacks {
+public:
+	virtual ~TileInitialCallbacks() = default;
+	virtual void put_initial_row(std::int16_t top, const TileSectionRow &images) noexcept = 0;
+};
+
+// th02/main/tile/tile.cpp::tiles_fill_and_put_initial. Draws each map row,
+// then copies it into the reverse-ordered ring. The final ring row24 is
+// deliberately retained. No page selection or second-page redraw is implied.
+[[nodiscard]] TileScrollResult tiles_fill_and_put_initial(TileScrollState &state,
+	const EnemyStageData &stage, const TileSectionTiles &sections,
+	TileInitialCallbacks &callbacks) noexcept;
+
 // th02/main/tile/tile.cpp::tiles_stuff_reset. The last three references are
 // root-owned source globals, kept borrowed so this port retains all five
 // original writes without duplicating page or tile-render ownership.
