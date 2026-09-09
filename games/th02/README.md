@@ -277,3 +277,15 @@ session remain outside this slice. Invalid host page, shot-level, bonus-table,
 item-pattern, and nonzero-score rank states stop at their corresponding source
 read without rollback. Focused tests are source-derived native coverage, not
 oracle or gameplay-session validation.
+
+`core/enemy.hpp` adds the source-ordered `enemy_hittest()` composition. Its
+fixed-width `Enemy` record retains the source 0x26-byte field boundaries,
+including raw flags and page positions; `EnemyTemplate` uses semantic scalar
+fields and a script index instead of a host pointer or a forced DOS-layout
+size. The helper validates both player pages and the shot level before any
+mutation, applies strict 32x32 player collision using front-page X and current
+Y, then unconditionally calls the existing `shots_hittest()` seam with a
+synchronous spark callback. Its optional result is the source signed 16-bit
+damage word. Enemy spawn/template loading, script VM and firing, bullet
+allocation, HP/death/rewards, rendering, and stage scheduling remain separate;
+this is source-derived native coverage, not a playable or replay verifier.
