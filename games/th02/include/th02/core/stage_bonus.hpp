@@ -33,6 +33,12 @@ enum class StageClearBonusResult : std::uint8_t {
 	source_score_grant_fault,
 };
 
+// Arithmetic only, allowing the stage owner to emit rows and reset sound
+// before the source's immediate score grant. Does not mutate ScoreState.
+void stage_clear_bonus_calculate(std::int8_t rank, const PlayerMissState &miss,
+	const BombState &bomb, const ItemLifecycleState &items,
+	std::uint8_t start_lives, StageClearBonusTally &tally) noexcept;
+
 // Deterministic arithmetic/state slice of
 // th02/main/stage/bonus.cpp::stage_clear_bonus_animate. This borrows the
 // source owners for play performance/miss/start-bomb, bomb count, and point

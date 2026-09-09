@@ -461,3 +461,9 @@ The enclosing boss script and actual text/sprite rasterization remain separate.
 source face/text boxes, post-slide and combat setup. The suspended stage frame
 then resumes through `stage1_frame_after_boss_init`, without an extra gameplay
 tick. Actual text/sprite rasterization and music playback remain host services.
+
+`core/stage1_end.hpp` connects the eight post-boss boxes, clear bonus,
+two independent acknowledgements and the timed exit overlay. It leaves the
+original pending score delta intact and resumes the existing stage-end frame
+boundary. Bonus arithmetic remains independently reusable; neither this path
+nor the intro has yet been validated against a user replay.

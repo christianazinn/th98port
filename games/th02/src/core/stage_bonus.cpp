@@ -70,8 +70,8 @@ void sum_row(StageClearBonusTally &tally, std::size_t index) noexcept
 
 } // namespace
 
-StageClearBonusResult stage_clear_bonus_apply(
-	ScoreState &score, std::int8_t rank, const PlayerMissState &miss,
+void stage_clear_bonus_calculate(
+	std::int8_t rank, const PlayerMissState &miss,
 	const BombState &bomb, const ItemLifecycleState &items,
 	std::uint8_t start_lives, StageClearBonusTally &tally
 ) noexcept
@@ -100,6 +100,15 @@ StageClearBonusResult stage_clear_bonus_apply(
 	tally.total_x10 = dword_multiply(tally.sum_x10,
 		static_cast<std::int32_t>(items.point_items_collected));
 	tally.bonus_delta = tally.total_x10 / 10;
+}
+
+StageClearBonusResult stage_clear_bonus_apply(
+	ScoreState &score, std::int8_t rank, const PlayerMissState &miss,
+	const BombState &bomb, const ItemLifecycleState &items,
+	std::uint8_t start_lives, StageClearBonusTally &tally
+) noexcept
+{
+	stage_clear_bonus_calculate(rank, miss, bomb, items, start_lives, tally);
 	score.score_delta = dword_add(score.score_delta, tally.bonus_delta);
 	const auto score_events = score_grant_current_delta_as_bonus(score);
 	if(!score_events.has_value()) {
