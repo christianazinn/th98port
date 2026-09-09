@@ -21,6 +21,7 @@ inline constexpr std::int16_t enemy_hittest_width = 32;
 inline constexpr std::int16_t enemy_hittest_height = 32;
 inline constexpr std::uint8_t enemy_free = 0U;
 inline constexpr std::uint8_t enemy_alive = 1U;
+inline constexpr std::uint8_t enemy_remove = 2U;
 
 // Raw source entity flags remain bytes. enemy_hittest() deliberately does not
 // inspect this field; the source caller filters alive/removing records before
@@ -190,6 +191,15 @@ void enemies_reset(EnemyPoolState &state) noexcept;
 [[nodiscard]] EnemyMotionResult enemy_angle_step_and_move(
 	Enemy &enemy, std::span<const std::uint8_t> script,
 	std::int16_t operand, std::int16_t sign, std::size_t page_back
+) noexcept;
+
+// th02/main/enemy/update.cpp::enemy_angle_spin_and_move. It reads the sign
+// flag and base angle, then changes the signed-word angle with the next
+// operand before reading speed. Position takes the pre-turn angle's full word
+// vector; cached velocity keeps only its signed low bytes.
+[[nodiscard]] EnemyMotionResult enemy_angle_spin_and_move(
+	Enemy &enemy, std::span<const std::uint8_t> script,
+	std::size_t page_back
 ) noexcept;
 
 // Source th02/main/enemy/update.cpp::enemy_hittest. The wrapper borrows all

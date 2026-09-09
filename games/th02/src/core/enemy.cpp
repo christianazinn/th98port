@@ -245,6 +245,48 @@ EnemyMotionResult enemy_angle_step_and_move(Enemy &enemy,
 	return EnemyMotionResult::completed;
 }
 
+EnemyMotionResult enemy_angle_spin_and_move(Enemy &enemy,
+	std::span<const std::uint8_t> script, std::size_t page_back
+) noexcept
+{
+	if(page_back >= enemy.pos_on_page.size()) {
+		return EnemyMotionResult::invalid_page;
+	}
+
+	const auto ip = add_word(enemy.script_ip, 2);
+	std::uint8_t sign_flag{};
+	if(!script_byte_at(script, ip, sign_flag)) {
+		return EnemyMotionResult::invalid_script_operand;
+	}
+	const auto sign = (sign_flag == 0U) ? -1 : 1;
+	std::uint8_t base{};
+	if(!script_byte_at(script, add_word(ip, 1), base)) {
+		return EnemyMotionResult::invalid_script_operand;
+	}
+	const auto angle = static_cast<std::uint8_t>(
+		add_word(static_cast<std::int16_t>(base), enemy.angle)
+	);
+	std::uint8_t turn{};
+	if(!script_byte_at(script, add_word(ip, 2), turn)) {
+		return EnemyMotionResult::invalid_script_operand;
+	}
+	enemy.angle = add_word(enemy.angle, static_cast<std::int16_t>(
+		static_cast<std::int16_t>(turn) * sign
+	));
+	std::uint8_t speed{};
+	if(!script_byte_at(script, add_word(ip, 3), speed)) {
+		return EnemyMotionResult::invalid_script_operand;
+	}
+
+	const auto vector = pc98::masterlib::vector2(angle, speed);
+	auto &position = enemy.pos_on_page[page_back];
+	position.x = add_word(position.x, vector.x);
+	position.y = add_word(position.y, vector.y);
+	enemy.velocity_x = narrow_signed_byte(vector.x);
+	enemy.velocity_y = narrow_signed_byte(vector.y);
+	return EnemyMotionResult::completed;
+}
+
 std::optional<std::int16_t> enemy_hittest(
 	Enemy &enemy, const EnemyTemplate &enemy_template,
 	const PlayerFrameState &player_frame, PlayerHitState &player_hit,
