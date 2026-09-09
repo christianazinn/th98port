@@ -434,4 +434,11 @@ valid stage. `core/stage1_frame.hpp` implements the post-entity frame tail:
 deferred pause completion, scroll finish, page flip, boss/ending suspension,
 counter advance, periodic rank rise and score transfer. Explicit lifecycle
 continuations are not substitutes for the unported dialogue. The pre-entity
-scroll/spawn schedule and complete stage initialization remain outstanding.
+scroll/spawn schedule is supplied separately below; complete stage initialization
+remains outstanding.
+
+`core/stage1_prepare.hpp` connects old-page invalidation, spawning, scenery,
+midboss activation and current-page scroll preparation before input. Its
+notification prelude preserves the title callback retirement and byte-sized
+BGM clock. The caller still supplies actual input and runs the concrete entity
+and frame-tail passes; tile rasterization is only a presentation request.
