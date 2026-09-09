@@ -57,12 +57,12 @@ struct Sink final : Stage1EndPresentation, Stage1FramePresentation {
 	void page_show(std::size_t) noexcept override {}
 };
 
-void complete_end()
+void complete_end(bool meira)
 {
 	Stage1State state{};
 	Stage1EndState end{};
 	Sink sink{state};
-	state.dialog.box_current = 16;
+	state.dialog.box_current = meira ? 24 : 16;
 	state.stage_frame = 901;
 	state.resident_frame = 999;
 	state.random.seed = 52;
@@ -78,7 +78,7 @@ void complete_end()
 	state.spark_parameters.acceleration_x = 5;
 	state.stage_bg_flash.frame = 20;
 	state.stage_progression = StageProgression::clear;
-	auto wait = stage1_end_begin(state, end, sink);
+	auto wait = meira ? stage2_end_begin(state, end, sink) : stage1_end_begin(state, end, sink);
 	unsigned delays = 0, samples = 0, calls = 0;
 	while (wait != Stage1EndWait::complete) {
 		require(++calls < 2000);
@@ -97,13 +97,14 @@ void complete_end()
 		default: require(false);
 		}
 	}
-	require(samples == 304 && delays == 105);
-	require(state.dialog.box_current == 24 && state.input == 1);
-	require(sink.faces == std::vector<std::int16_t>({99, 99, 57, 96, 3, 99, 9, 96}));
+	require(samples == (meira ? 418U : 304U) && delays == (meira ? 117U : 105U));
+	require(state.dialog.box_current == (meira ? 35 : 24) && state.input == 1);
+	require(sink.faces == (meira ? std::vector<std::int16_t>({9, 54, 57, 9, 96, 150, 57, 96, 54, 96, 12}) :
+		std::vector<std::int16_t>({99, 99, 57, 96, 3, 99, 9, 96})));
 	require(sink.events == std::vector<int>({2, 3, 10, 11, 12, 13, 14, 15, 4, 5, 2, 6}));
 	require(sink.pages == std::vector<std::size_t>({1})); // No dialog_post.
 	require(state.tile_mode == 0 && state.dialog.restore_tile_mode_none_at_post);
-	require(state.stage_id == 1 && state.spark_parameters.acceleration_x == 0 && state.stage_bg_flash.frame == 0);
+	require(state.stage_id == 1 && state.spark_parameters.acceleration_x == 0 && state.stage_bg_flash.frame == (meira ? 20 : 0));
 	require(state.score.score == 2720 && state.score.score_delta == 2710);
 	require(state.stage_frame == 901 && state.resident_frame == 999 && state.random == random_before);
 	require(sink.cells.size() == 21U * 24U * 23U);
@@ -146,4 +147,4 @@ void acknowledgement_requires_new_release()
 	require(end.phase == Stage1EndPhase::leave_overlay && state.input == 1 && state.dialog.box_current == 0);
 }
 } // namespace
-int main() { complete_end(); acknowledgement_requires_new_release(); }
+int main() { complete_end(false); complete_end(true); acknowledgement_requires_new_release(); }

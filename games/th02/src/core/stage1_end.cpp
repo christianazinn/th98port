@@ -5,10 +5,12 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <span>
 
 namespace th02::core {
 namespace {
 constexpr std::array<std::uint8_t, 8> faces{99, 99, 57, 96, 3, 99, 9, 96};
+constexpr std::array<std::uint8_t, 11> meira_faces{9, 54, 57, 9, 96, 150, 57, 96, 54, 96, 12};
 
 void acknowledgement_begin(Stage1EndState &end) noexcept
 {
@@ -57,13 +59,15 @@ void bonus_begin(Stage1State &state, Stage1EndState &end,
 Stage1EndWait advance(Stage1State &state, Stage1EndState &end,
 	Stage1EndPresentation &presentation) noexcept
 {
+	const std::span<const std::uint8_t> sequence = end.boss == StageEndBoss::rika ?
+		std::span<const std::uint8_t>(faces) : std::span<const std::uint8_t>(meira_faces);
 	if (end.phase == Stage1EndPhase::pre_slide && end.slide.phase == DialogSlidePhase::complete) {
-		dialog_box_begin(state.dialog, end.box, faces[0], presentation);
+		dialog_box_begin(state.dialog, end.box, sequence[0], presentation);
 		end.phase = Stage1EndPhase::boxes;
 	} else if (end.phase == Stage1EndPhase::boxes && end.box.phase == DialogBoxPhase::complete) {
 		++end.sequence_index;
-		if (end.sequence_index < faces.size())
-			dialog_box_begin(state.dialog, end.box, faces[end.sequence_index], presentation);
+		if (end.sequence_index < sequence.size())
+			dialog_box_begin(state.dialog, end.box, sequence[end.sequence_index], presentation);
 		else bonus_begin(state, end, presentation);
 	}
 	if (end.slide.phase == DialogSlidePhase::score_refused ||
@@ -115,10 +119,25 @@ Stage1EndWait stage1_end_after_delay(Stage1State &state, Stage1EndState &end,
 			end.acknowledgement = Stage1EndWait::acknowledgement_second_sample;
 	} else if (end.phase == Stage1EndPhase::leave_overlay) {
 		if (++end.overlay_frame == 21) {
-			rika_stage_leave_finish(state.stage_id, state.spark_parameters, state.stage_bg_flash);
+			if (end.boss == StageEndBoss::rika)
+				rika_stage_leave_finish(state.stage_id, state.spark_parameters, state.stage_bg_flash);
+			else {
+				state.stage_id = static_cast<std::uint8_t>(state.stage_id + 1);
+				state.spark_parameters.acceleration_x = 0;
+			}
 			end.phase = Stage1EndPhase::complete;
 		} else overlay_put(end, presentation);
 	}
+	return advance(state, end, presentation);
+}
+
+Stage1EndWait stage2_end_begin(StageState &state, Stage1EndState &end,
+	Stage1EndPresentation &presentation) noexcept
+{
+	end = {};
+	end.boss = StageEndBoss::meira;
+	end.phase = Stage1EndPhase::pre_slide;
+	(void)dialog_pre_begin(state, state.dialog, end.slide, presentation);
 	return advance(state, end, presentation);
 }
 
