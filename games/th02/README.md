@@ -303,7 +303,7 @@ iatan2/vector helpers supply aimed and polar velocity without a TH03
 dependency; a modeled iatan2 fault leaves its already-written source prefix.
 Normal clip/bomb/Easy/full-pool paths complete normally, while host-invalid
 pages and the source fault are explicit results. Stage reset, 16x16 special
-bullets, update, invalidation, collision, rendering, bomb ownership, page
+allocation, invalidation, collision follow-up, bomb ownership, page
 scheduling, replay, and playable-session behavior remain separate.
 
 `core/bullet.hpp` and `core/bullet.cpp` also provide TH02's
@@ -311,15 +311,28 @@ scheduling, replay, and playable-session behavior remain separate.
 source-sized pool scan and every low-byte group expansion, retaining the
 16x16-specific record prefix, source-word patnum narrowing, special-motion
 threshold, gravity tuning exception, direct polar setup, stacks, and the
-ordinary aimed-group fault prefix. Per-frame special behavior, bullet update,
-invalidation, rendering, collision, stage parameter setup, scheduling, replay,
-and playable-session behavior remain outside this narrow allocation slice.
+ordinary aimed-group fault prefix. Its stage parameter setup, invalidation,
+collision follow-up, scheduling, replay, and playable-session behavior remain
+outside that narrow allocation slice; per-frame update is supplied below.
 
 `core/bullet_lifecycle.hpp` and `core/bullet_lifecycle.cpp` provide the
 source-order state passes for `bullets_invalidate()` and `bullets_clear()`.
 They emit synchronous old-back-page tile invalidation requests, preserve the
 remove-before-carry distinction, and leave VRAM, page scheduling, rendering,
 update, collision, and stage ownership separate.
+
+`core/bullet.hpp` and `core/bullet.cpp` now provide
+`bullets_update_and_render()` with its source-private special-motion body.
+It updates the selected back-page Q12.4 record before special motion, retains
+the source's distinct pellet/16x16 clip and raw-hit windows, and gives every
+known special its original signed-word/byte ordering, duration boundary, and
+master.lib iatan2 fault prefix. The deterministic scroll-line word add and
+single 400-line wrap occur in the concrete body. Pellet color, pellet render,
+GRCG-off, and 16x16 sprite calls are ordered synchronous presentation events;
+this does not claim VRAM or a renderer. Bullet invalidation/clear remains its
+separate preceding page pass, while page scheduling, collision follow-up,
+stage parameter setup, replay, and playable-session behavior remain outside
+this source-bounded slice.
 
 `core/enemy.hpp` and `core/enemy.cpp` also provide the source-sized
 `enemy_pos_update()`, `enemy_pos_update_aimed()`, and

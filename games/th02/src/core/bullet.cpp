@@ -327,6 +327,183 @@ void increment_byte(std::int8_t &value) noexcept
 	return done ? GroupVelocityResult::done : GroupVelocityResult::continued;
 }
 
+[[nodiscard]] std::int16_t to_pixels(std::int16_t subpixels) noexcept
+{
+	return arithmetic_shift_right(subpixels, subpixel_bits);
+}
+
+[[nodiscard]] std::uint8_t byte_add(
+	std::uint8_t lhs, std::int16_t rhs
+) noexcept
+{
+	const auto bits = static_cast<std::uint16_t>(
+		static_cast<std::uint32_t>(lhs) +
+		static_cast<std::uint32_t>(std::bit_cast<std::uint16_t>(rhs))
+	);
+	return static_cast<std::uint8_t>(bits);
+}
+
+void increment_byte(std::uint8_t &value) noexcept
+{
+	value = byte_add(value, 1);
+}
+
+[[nodiscard]] std::int16_t word_negate(std::int16_t value) noexcept
+{
+	const auto bits = static_cast<std::uint16_t>(
+		0U - std::bit_cast<std::uint16_t>(value)
+	);
+	return std::bit_cast<std::int16_t>(bits);
+}
+
+[[nodiscard]] bool bullet_velocity_aimed(EnemyBullet &bullet,
+	ScreenPoint bullet_topleft, const PlayerFrameState &player_frame
+) noexcept
+{
+	const auto aim_y = word_add(player_frame.player.current.y, 8);
+	const auto aim_x = word_add(player_frame.player.current.x, 8);
+	const auto aimed = pc98::masterlib::iatan2_source(
+		word_subtract(aim_y, bullet_topleft.y),
+		word_subtract(aim_x, bullet_topleft.x)
+	);
+	if(!aimed) return false;
+	const auto velocity = pc98::masterlib::vector2(
+		*aimed, static_cast<std::int16_t>(bullet.speed)
+	);
+	bullet.velocity = {velocity.x, velocity.y};
+	return true;
+}
+
+[[nodiscard]] bool bullet_update_special(EnemyBullet &bullet,
+	ScreenPoint bullet_topleft, const PlayerFrameState &player_frame,
+	const EnemyBulletSpecialState &special, std::uint32_t stage_frame
+) noexcept
+{
+	const auto aim_y = word_add(player_frame.player.current.y, 8);
+	const auto aim_x = word_add(player_frame.player.current.x, 8);
+	auto chase_player = [&](std::int16_t speed) noexcept {
+		if(bullet_topleft.x < aim_x) {
+			bullet.velocity.x = word_add(bullet.velocity.x, speed);
+		} else if(bullet_topleft.x > aim_x) {
+			bullet.velocity.x = word_subtract(bullet.velocity.x, speed);
+		}
+		if(bullet_topleft.y < aim_y) {
+			bullet.velocity.y = word_add(bullet.velocity.y, speed);
+		} else if(bullet_topleft.y > aim_y) {
+			bullet.velocity.y = word_subtract(bullet.velocity.y, speed);
+		}
+	};
+
+	switch(bullet.group_or_special_motion) {
+	case enemy_bullet_special_motion::chase:
+		chase_player(special.chase_gravity_or_drift_angle);
+		break;
+
+	case enemy_bullet_special_motion::homing:
+		increment_byte(bullet.u1);
+		if(static_cast<std::int16_t>(bullet.u1) <
+			special.homing_frames_or_drift_speed) {
+			if(!bullet_velocity_aimed(bullet, bullet_topleft, player_frame)) {
+				return false;
+			}
+		} else {
+			bullet.group_or_special_motion = 0U;
+		}
+		break;
+
+	case enemy_bullet_special_motion::decelerate_then_turn_aimed:
+		if((stage_frame & 7U) != 0U) break;
+		bullet.velocity.x = signed_word_divide(bullet.velocity.x, 2);
+		bullet.velocity.y = signed_word_divide(bullet.velocity.y, 2);
+		if((bullet.velocity.x == 0) && (bullet.velocity.y == 0)) {
+			if(!bullet_velocity_aimed(bullet, bullet_topleft, player_frame)) {
+				return false;
+			}
+			increment_byte(bullet.u1);
+			if(static_cast<std::int16_t>(bullet.u1) >=
+				special.turns_or_drift_frames) {
+				bullet.group_or_special_motion = 0U;
+			}
+		}
+		break;
+
+	case enemy_bullet_special_motion::gravity:
+		bullet.velocity.y = word_add(
+			bullet.velocity.y, special.chase_gravity_or_drift_angle
+		);
+		break;
+
+	case enemy_bullet_special_motion::drift_angle_and_speed: {
+		bullet.angle = byte_add(
+			bullet.angle, special.chase_gravity_or_drift_angle
+		);
+		bullet.speed = byte_add(
+			bullet.speed, special.homing_frames_or_drift_speed
+		);
+		const auto velocity = pc98::masterlib::vector2(
+			bullet.angle, static_cast<std::int16_t>(bullet.speed)
+		);
+		bullet.velocity = {velocity.x, velocity.y};
+		increment_byte(bullet.u1);
+		if(static_cast<std::int16_t>(bullet.u1) >
+			special.turns_or_drift_frames) {
+			bullet.group_or_special_motion = 0U;
+		}
+		break;
+	}
+
+	case enemy_bullet_special_motion::drift_angle_chase: {
+		bullet.angle = byte_add(
+			bullet.angle, special.chase_gravity_or_drift_angle
+		);
+		const auto velocity = pc98::masterlib::vector2(
+			bullet.angle, static_cast<std::int16_t>(bullet.speed)
+		);
+		bullet.velocity = {velocity.x, velocity.y};
+		chase_player(special.homing_frames_or_drift_speed);
+		increment_byte(bullet.u1);
+		if(static_cast<std::int16_t>(bullet.u1) >
+			special.turns_or_drift_frames) {
+			bullet.group_or_special_motion = 0U;
+		}
+		break;
+	}
+
+	case enemy_bullet_special_motion::bounce_left_right_top_bottom:
+		if((bullet_topleft.x < 40) || (bullet_topleft.x > 392)) {
+			bullet.velocity.x = word_negate(bullet.velocity.x);
+			increment_byte(bullet.u1);
+		}
+		[[fallthrough]];
+
+	case enemy_bullet_special_motion::bounce_top_bottom:
+		if((bullet_topleft.y < 24) || (bullet_topleft.y > 360)) {
+			bullet.velocity.y = word_negate(bullet.velocity.y);
+			increment_byte(bullet.u1);
+		}
+		if(static_cast<std::int16_t>(bullet.u1) >
+			special.turns_or_drift_frames) {
+			bullet.group_or_special_motion = 0U;
+		}
+		break;
+
+	default:
+		break;
+	}
+	return true;
+}
+
+[[nodiscard]] std::int16_t scroll_screen_y_to_vram(
+	std::int16_t screen_y, std::int16_t scroll_line
+) noexcept
+{
+	auto vram_y = word_add(screen_y, scroll_line);
+	if(vram_y >= 400) {
+		vram_y = word_subtract(vram_y, 400);
+	}
+	return vram_y;
+}
+
 } // namespace
 
 EnemyBulletAddResult bullets_add_pellet(
@@ -451,6 +628,88 @@ EnemyBulletAddResult bullets_add_16x16(
 		group_i = 0;
 	} while(true);
 	return EnemyBulletAddResult::completed;
+}
+
+EnemyBulletUpdateResult bullets_update_and_render(
+	EnemyBulletPoolState &state, const PlayerFrameState &player_frame,
+	PlayerHitState &hit, const EnemyBulletSpecialState &special,
+	std::uint32_t stage_frame, std::int16_t scroll_line,
+	EnemyBulletPresentationCallbacks &presentation
+) noexcept
+{
+	if(player_frame.page_back >= state.bullets.front().screen_topleft_on_page.size()) {
+		return EnemyBulletUpdateResult::invalid_page;
+	}
+
+	bool not_rendering_pellets = true;
+	for(auto &bullet : state.bullets) {
+		if(bullet.flag != enemy_bullet_alive) continue;
+
+		auto &position = bullet.screen_topleft_on_page[player_frame.page_back];
+		position.x = word_add(position.x, bullet.velocity.x);
+		position.y = word_add(position.y, bullet.velocity.y);
+		ScreenPoint topleft{to_pixels(position.x), to_pixels(position.y)};
+		if(bullet.size_type == enemy_bullet_16x16 &&
+			!bullet_update_special(
+				bullet, topleft, player_frame, special, stage_frame
+			)) {
+			return EnemyBulletUpdateResult::source_iatan2_fault;
+		}
+
+		if((topleft.x <= 20) || (topleft.x >= playfield_right) ||
+			(topleft.y >= playfield_bottom) || (topleft.y <= 0)) {
+			bullet.flag = enemy_bullet_remove;
+			continue;
+		}
+
+		const auto player_center_x = word_add(player_frame.player.current.x, 16);
+		const auto player_center_y = word_add(player_frame.player.current.y, 24);
+		const bool player_hit = (bullet.size_type == enemy_bullet_pellet)
+			? ((topleft.x >= word_add(player_center_x, -9)) &&
+				(topleft.x < word_add(player_center_x, 1)) &&
+				(topleft.y >= word_add(player_center_y, -12)) &&
+				(topleft.y <= word_add(player_center_y, -2)))
+			: ((topleft.x >= word_add(player_center_x, -19)) &&
+				(topleft.x < word_add(player_center_x, 3)) &&
+				(topleft.y >= word_add(player_center_y, -20)) &&
+				(topleft.y <= player_center_y));
+		if(player_hit) {
+			hit.raw_hit = 1U;
+			bullet.flag = enemy_bullet_remove;
+			continue;
+		}
+
+		const auto vram_top = scroll_screen_y_to_vram(topleft.y, scroll_line);
+		if(bullet.size_type == enemy_bullet_pellet) {
+			if(not_rendering_pellets) {
+				presentation.present({
+					EnemyBulletPresentationKind::set_pellet_color_white,
+					{},
+					0U,
+				});
+				not_rendering_pellets = false;
+			}
+			presentation.present({
+				EnemyBulletPresentationKind::render_pellet,
+				{topleft.x, vram_top},
+				0U,
+			});
+		} else {
+			presentation.present({
+				EnemyBulletPresentationKind::grcg_off,
+				{},
+				0U,
+			});
+			presentation.present({
+				EnemyBulletPresentationKind::render_bullet_16x16,
+				{topleft.x, vram_top},
+				bullet.patnum,
+			});
+			not_rendering_pellets = true;
+		}
+	}
+	presentation.present({EnemyBulletPresentationKind::grcg_off, {}, 0U});
+	return EnemyBulletUpdateResult::completed;
 }
 
 } // namespace th02::core

@@ -15,6 +15,7 @@ inline constexpr std::int8_t enemy_bullet_free = 0;
 inline constexpr std::int8_t enemy_bullet_alive = 1;
 inline constexpr std::int8_t enemy_bullet_pellet = 1;
 inline constexpr std::int8_t enemy_bullet_16x16 = 2;
+inline constexpr std::int8_t enemy_bullet_remove = 2;
 
 // Raw group bytes from th02/main/bullet/bullet.hpp. The public allocator takes
 // a byte because the donor's default branch gives unsupported values concrete
@@ -59,11 +60,18 @@ inline constexpr std::uint8_t ring_32 = 0x27U;
 } // namespace enemy_bullet_group
 
 // Raw values at and above this threshold take bullets_add_16x16()'s direct
-// special-motion allocation path. Future update work owns their per-frame
-// behavior; this allocation slice needs only gravity's tuning exception.
+// special-motion allocation path. Allocation needs gravity's tuning exception;
+// the update body owns the per-frame interpretations.
 namespace enemy_bullet_special_motion {
 inline constexpr std::uint8_t first = 0x80U;
+inline constexpr std::uint8_t chase = 0x80U;
+inline constexpr std::uint8_t homing = 0x81U;
+inline constexpr std::uint8_t decelerate_then_turn_aimed = 0x82U;
 inline constexpr std::uint8_t gravity = 0x83U;
+inline constexpr std::uint8_t drift_angle_and_speed = 0x84U;
+inline constexpr std::uint8_t drift_angle_chase = 0x85U;
+inline constexpr std::uint8_t bounce_left_right_top_bottom = 0x87U;
+inline constexpr std::uint8_t bounce_top_bottom = 0x88U;
 } // namespace enemy_bullet_special_motion
 
 // The source's packed bullet_t record. Pellet allocation intentionally keeps
@@ -111,6 +119,45 @@ enum class EnemyBulletAddResult : std::uint8_t {
 	source_iatan2_fault,
 };
 
+// Three source-global signed words, each standing in for one of bullet_special
+// union's same-width interpretations. The update reads these exact raw values;
+// stage setup remains their separate owner.
+struct EnemyBulletSpecialState {
+	std::int16_t chase_gravity_or_drift_angle{};
+	std::int16_t homing_frames_or_drift_speed{};
+	std::int16_t turns_or_drift_frames{};
+	bool operator==(const EnemyBulletSpecialState &) const = default;
+};
+
+enum class EnemyBulletPresentationKind : std::uint8_t {
+	set_pellet_color_white,
+	render_pellet,
+	grcg_off,
+	render_bullet_16x16,
+};
+
+// A source-position presentation request. Its topleft has already passed the
+// synchronous scroll conversion boundary; no VRAM or grcg implementation is
+// implied by this state-only update slice.
+struct EnemyBulletPresentationEvent {
+	EnemyBulletPresentationKind kind{};
+	ScreenPoint topleft{};
+	std::uint8_t patnum{};
+	bool operator==(const EnemyBulletPresentationEvent &) const = default;
+};
+
+class EnemyBulletPresentationCallbacks {
+public:
+	virtual ~EnemyBulletPresentationCallbacks() = default;
+	virtual void present(EnemyBulletPresentationEvent event) noexcept = 0;
+};
+
+enum class EnemyBulletUpdateResult : std::uint8_t {
+	completed,
+	invalid_page,
+	source_iatan2_fault,
+};
+
 // th02/main/bullet/bullet.cpp::bullets_add_pellet. This concrete regular enemy
 // allocation body scans source-free records and expands every raw group byte.
 // It borrows the already-owned frame position/page, current playperf, rank,
@@ -137,6 +184,21 @@ enum class EnemyBulletAddResult : std::uint8_t {
 	std::int8_t rank, bool bombing, ScreenPoint topleft, std::uint8_t angle,
 	std::uint8_t group_or_special_motion, std::int16_t patnum,
 	std::int16_t speed
+) noexcept;
+
+// th02/main/bullet/bullet.cpp::bullets_update_and_render and its private
+// bullet_update_special helper. It moves selected-back-page alive records,
+// applies special motion only to size type 2, then performs source clip/hit
+// removal and ordered synchronous presentation requests. A host-invalid page
+// refuses before mutation. A modeled iatan2 fault preserves all earlier
+// position/special writes and stops before subsequent records and the final
+// grcg_off request. This owns neither VRAM nor scrolling state, invalidation,
+// clear, collision follow-up, or frame scheduling.
+[[nodiscard]] EnemyBulletUpdateResult bullets_update_and_render(
+	EnemyBulletPoolState &state, const PlayerFrameState &player_frame,
+	PlayerHitState &hit, const EnemyBulletSpecialState &special,
+	std::uint32_t stage_frame, std::int16_t scroll_line,
+	EnemyBulletPresentationCallbacks &presentation
 ) noexcept;
 
 } // namespace th02::core
