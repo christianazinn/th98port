@@ -167,6 +167,19 @@ void add_plain_hit_shot(Fixture &fixture, ScreenPoint topleft) noexcept
 			Midboss2Sprite{Midboss2SpriteKind::normal, {192, 389}, 139, 0};
 }
 
+[[nodiscard]] bool test_invalid_page_retains_target_x_prefix() noexcept
+{
+	Fixture fixture{};
+	fixture.frame.page_back = 2U;
+	fixture.boss.target = {9, 17};
+	if(midboss2_update_and_render(fixture.boss, fixture.state, fixture.context,
+		fixture.callbacks) != Midboss2UpdateResult::invalid_page) {
+		return false;
+	}
+	return fixture.boss.target == ScreenPoint{216, 17} &&
+		fixture.boss.phase_frame == 0 && fixture.callbacks.event_count == 0U;
+}
+
 [[nodiscard]] bool test_entry_hit_uses_one_damage_per_frame() noexcept
 {
 	Fixture fixture{};
@@ -259,6 +272,8 @@ void add_plain_hit_shot(Fixture &fixture, ScreenPoint topleft) noexcept
 		progressing.boss.phase_frame != 701 || progressing.state.defeat_frame != 6 ||
 		progressing.sparks.sparks[0U].flag != spark_alive ||
 		progressing.sparks.sparks[23U].flag != spark_alive ||
+		progressing.sparks.sparks[0U].velocity != SparkSubpixelPoint{128, 0} ||
+		progressing.sparks.sparks[0U].speed_base != 0U ||
 		progressing.callbacks.sprite_count != 1U ||
 		progressing.callbacks.sprites[0U] != Midboss2Sprite{
 			Midboss2SpriteKind::defeat_zoom, {200, 50}, 10, 2}) {
@@ -300,6 +315,7 @@ int main()
 	const std::array tests{
 		test_invalidate_carries_after_old_back_callback,
 		test_initialize_and_entry_back_page_motion,
+		test_invalid_page_retains_target_x_prefix,
 		test_entry_hit_uses_one_damage_per_frame,
 		test_living_pattern_uses_real_chase_bullet_without_rng,
 		test_living_hit_threshold_and_scrolled_edge,

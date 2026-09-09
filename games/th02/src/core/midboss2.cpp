@@ -124,7 +124,7 @@ constexpr std::int16_t midboss_bullet_speed = 30;
 		(state.defeat_frame & 15) == 5) {
 		if(!sparks_add(context.sparks, context.player_frame.page_back,
 			word_add(back_topleft.x, 32),
-			static_cast<std::uint16_t>(word_add(back_topleft.y, 32)), 8,
+			static_cast<std::uint16_t>(word_add(back_topleft.y, 32)), 128,
 			midboss_defeat_spark_count, true)) {
 			return Midboss2UpdateResult::defeat_spark_allocation_refused;
 		}
@@ -232,11 +232,12 @@ Midboss2UpdateResult midboss2_update_and_render(BossState &boss,
 	Midboss2Callbacks &callbacks
 ) noexcept
 {
+	boss.target.x = 216;
 	if(context.player_frame.page_back >= boss.topleft_on_page.size()) {
 		return Midboss2UpdateResult::invalid_page;
 	}
 	auto &back_topleft = boss.topleft_on_page[context.player_frame.page_back];
-	boss.target = {216, word_add(back_topleft.y, 24)};
+	boss.target.y = word_add(back_topleft.y, 24);
 	boss.phase_frame = word_add(boss.phase_frame, 1);
 	if(boss.phase_frame == 1) {
 		boss.topleft_on_page[0U] = {midboss_enter_left, midboss_enter_top};
