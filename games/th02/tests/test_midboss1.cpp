@@ -26,13 +26,13 @@ enum class EventKind : std::uint8_t { invalidate, tile, sound, sprite };
 class RecordingCallbacks final : public Midboss1Callbacks {
 public:
 	explicit RecordingCallbacks(
-		const Midboss1BossState *boss_arg = nullptr,
+		const BossState *boss_arg = nullptr,
 		const PlayerFrameState *frame_arg = nullptr
 	) noexcept : boss(boss_arg), frame(frame_arg)
 	{
 	}
 
-	const Midboss1BossState *boss{};
+	const BossState *boss{};
 	const PlayerFrameState *frame{};
 	std::array<EventKind, 32U> events{};
 	std::size_t event_count{};
@@ -91,7 +91,7 @@ private:
 };
 
 struct Fixture {
-	Midboss1BossState boss{};
+	BossState boss{};
 	Midboss1State state{};
 	PlayerFrameState frame{};
 	PlayerShotPoolState shots{};

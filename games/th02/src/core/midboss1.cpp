@@ -65,7 +65,7 @@ constexpr std::int16_t midboss_patnum_alt = 149;
 }
 
 [[nodiscard]] Midboss1UpdateResult fire_pattern(
-	const Midboss1BossState &boss, ScreenPoint back_topleft,
+	const BossState &boss, ScreenPoint back_topleft,
 	Midboss1Context &context
 ) noexcept
 {
@@ -88,7 +88,7 @@ constexpr std::int16_t midboss_patnum_alt = 149;
 }
 
 [[nodiscard]] Midboss1UpdateResult defeat_update_and_render(
-	Midboss1BossState &boss, Midboss1State &state, ScreenPoint &back_topleft,
+	BossState &boss, Midboss1State &state, ScreenPoint &back_topleft,
 	Midboss1Context &context, Midboss1Callbacks &callbacks
 ) noexcept
 {
@@ -123,7 +123,7 @@ constexpr std::int16_t midboss_patnum_alt = 149;
 } // namespace
 
 Midboss1InvalidateResult midboss1_invalidate(
-	Midboss1BossState &boss, const PlayerFrameState &frame,
+	BossState &boss, const PlayerFrameState &frame,
 	const Midboss1State &state, Midboss1Callbacks &callbacks
 ) noexcept
 {
@@ -143,7 +143,7 @@ Midboss1InvalidateResult midboss1_invalidate(
 }
 
 Midboss1UpdateResult midboss1_update_and_render(
-	Midboss1BossState &boss, Midboss1State &state, Midboss1Context &context,
+	BossState &boss, Midboss1State &state, Midboss1Context &context,
 	Midboss1Callbacks &callbacks
 ) noexcept
 {

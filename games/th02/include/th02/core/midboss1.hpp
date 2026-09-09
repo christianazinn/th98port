@@ -1,26 +1,15 @@
 #pragma once
 
+#include "th02/core/boss.hpp"
 #include "th02/core/bullet.hpp"
 #include "th02/core/random.hpp"
 #include "th02/core/score.hpp"
 #include "th02/core/spark.hpp"
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 
 namespace th02::core {
-
-// A bounded projection of the boss globals reached by stage 1's M1 body. A
-// later common boss owner must unify this rather than creating a second copy.
-struct Midboss1BossState {
-	std::array<ScreenPoint, 2U> topleft_on_page{};
-	std::int16_t phase_frame{};
-	std::int16_t damage{};
-	std::uint8_t phase{};
-	ScreenPoint target{-1, -1};
-	bool operator==(const Midboss1BossState &) const = default;
-};
 
 // Stage-1-local globals reached by the M1 body. `active` is source bool16,
 // deliberately represented as a word rather than a host bool.
@@ -101,7 +90,7 @@ enum class Midboss1UpdateResult : std::uint8_t {
 // th02/main/midboss/m1.cpp::midboss1_invalidate. It invalidates the old back
 // position first, then carries front coordinates to the selected back page.
 [[nodiscard]] Midboss1InvalidateResult midboss1_invalidate(
-	Midboss1BossState &boss, const PlayerFrameState &frame,
+	BossState &boss, const PlayerFrameState &frame,
 	const Midboss1State &state, Midboss1Callbacks &callbacks
 ) noexcept;
 
@@ -109,7 +98,7 @@ enum class Midboss1UpdateResult : std::uint8_t {
 // firing-pattern and defeat helpers. A represented allocator/hittest refusal
 // preserves its reached source prefix and is never reported as completion.
 [[nodiscard]] Midboss1UpdateResult midboss1_update_and_render(
-	Midboss1BossState &boss, Midboss1State &state, Midboss1Context &context,
+	BossState &boss, Midboss1State &state, Midboss1Context &context,
 	Midboss1Callbacks &callbacks
 ) noexcept;
 
