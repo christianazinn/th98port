@@ -366,7 +366,16 @@ pass and clears the bound. These operations do not implicitly flip pages.
 `core/laser.hpp` provides the 12-slot source record, partial stage reset,
 first-free spawn and invalidation-driven charge progression. Sound and tile
 callbacks occur at their source positions. Laser update and collision remain
-separate. `core/bomb.hpp` provides the partial bomb reset, trigger with real
+in `core/laser_update.hpp`: phase timers, sound, charge/head/beam requests and
+raw player-hit writes follow source order. The cross-pass charge handover
+retains the original unequal bounds. `core/bomb.hpp` provides the partial bomb reset, trigger with real
 bullet clearing, and circle invalidation timer changes; bomb stock and player
 immunity use the existing owners. Shottype animation and full stage scheduling
 are not supplied by these lifecycle functions.
+
+`core/bomb_effects.hpp` adds the circle and B-ring sampling plus the real
+32-slot particle update. Four overlapping random-ring word reads precede
+each particle scan, even though this work lives in rendering-named source
+functions. Color, point and particle requests are presentation boundaries;
+the state and random updates execute in the core. This is not the complete
+shottype animation or a claim of pixel fidelity.
