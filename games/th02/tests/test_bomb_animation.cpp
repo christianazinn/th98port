@@ -347,17 +347,24 @@ void add_live_bullet(EnemyBulletPoolState &bullets) noexcept
 		callbacks.count_kind(EventKind::particle) == 0U) {
 		return false;
 	}
-	bomb.bomb_frame = 84;
+	bomb.bomb_frame = 134;
 	callbacks = {};
 	if(bomb_reimu_b(bomb, animation, effects, sparks, bullets, random, 0U,
 		1U, 0, true, callbacks) != BombAnimationResult::running ||
-		callbacks.count_kind(EventKind::pi) != 0U) {
+		callbacks.count_kind(EventKind::pi) != 0U ||
+		callbacks.count_kind(EventKind::circle) != 64U ||
+		callbacks.count_kind(EventKind::off) != 2U) {
 		return false;
 	}
 	callbacks = {};
 	if(bomb_reimu_b(bomb, animation, effects, sparks, bullets, random, 0U,
 		1U, 0, false, callbacks) != BombAnimationResult::running ||
-		callbacks.count_kind(EventKind::pi) != 1U) {
+		callbacks.count_kind(EventKind::pi) != 1U ||
+		callbacks.count_kind(EventKind::off) != 3U ||
+		callbacks.count != 72U || callbacks.events[2U].kind != EventKind::off ||
+		callbacks.events[3U].kind != EventKind::pi ||
+		callbacks.events[4U].kind != EventKind::color ||
+		callbacks.events[callbacks.count - 1U].kind != EventKind::off) {
 		return false;
 	}
 	bomb.bomb_frame = 164;
