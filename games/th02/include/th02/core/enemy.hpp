@@ -132,6 +132,18 @@ enum class EnemySpawnResult : std::uint8_t {
 	invalid_template,
 };
 
+// Typed native boundary results for the three complete source movement
+// helpers below. Script reads stay scoped to the donor dereference at which
+// they occur, so an earlier source write (notably the angle step) remains
+// visible if a later operand is unavailable.
+enum class EnemyMotionResult : std::uint8_t {
+	completed,
+	invalid_page,
+	invalid_script_operand,
+	source_divide_fault,
+	source_iatan2_fault,
+};
+
 // th02/main/enemy/update.cpp::enemies_reset. It frees only each raw enemy
 // flag and rewinds the spawn row; retained record payload and loop bound are
 // intentionally caller-visible source state.
@@ -154,6 +166,31 @@ void enemies_reset(EnemyPoolState &state) noexcept;
 	RandomState &random, const EnemySpawnGrid &grid,
 	std::span<const EnemyTemplate> templates,
 	const EnemySpawnContext &context) noexcept;
+
+// th02/main/enemy/update.cpp::enemy_pos_update. Adds the selected page's
+// signed byte velocity to its pixel position. It neither clips nor changes
+// the velocity or any other enemy field.
+[[nodiscard]] EnemyMotionResult enemy_pos_update(
+	Enemy &enemy, std::size_t page_back
+) noexcept;
+
+// th02/main/enemy/update.cpp::enemy_pos_update_aimed. It reads the raw
+// source-word script offset +2 as the vector length, uses the donor's swapped
+// player target (+24 X, +16 Y), narrows the vector into velocity bytes, then
+// adds the full vector words to the selected-page position.
+[[nodiscard]] EnemyMotionResult enemy_pos_update_aimed(
+	Enemy &enemy, const PlayerFrameState &player_frame,
+	std::span<const std::uint8_t> script, std::size_t page_back
+) noexcept;
+
+// th02/main/enemy/update.cpp::enemy_angle_step_and_move. It reads the
+// interval before deciding whether to change the signed-word angle, then
+// reads the base and speed operands in source order. Its full vector words
+// update position before their signed-byte velocity narrowing.
+[[nodiscard]] EnemyMotionResult enemy_angle_step_and_move(
+	Enemy &enemy, std::span<const std::uint8_t> script,
+	std::int16_t operand, std::int16_t sign, std::size_t page_back
+) noexcept;
 
 // Source th02/main/enemy/update.cpp::enemy_hittest. The wrapper borrows all
 // player/shot/score state and performs native page/level refusal before the

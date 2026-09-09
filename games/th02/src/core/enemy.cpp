@@ -2,6 +2,9 @@
 
 #include "th02/core/random.hpp"
 
+#include "pc98/masterlib_iatan2.hpp"
+#include "pc98/masterlib_vector.hpp"
+
 #include <bit>
 
 namespace th02::core {
@@ -42,6 +45,26 @@ constexpr std::int16_t enemy_spawn_left_base = 16;
 {
 	return value > subtract_word(origin, player_collision_half_extent) &&
 		value < add_word(origin, player_collision_half_extent);
+}
+
+[[nodiscard]] std::int8_t narrow_signed_byte(std::int16_t value) noexcept
+{
+	return std::bit_cast<std::int8_t>(
+		static_cast<std::uint8_t>(std::bit_cast<std::uint16_t>(value))
+	);
+}
+
+[[nodiscard]] bool script_byte_at(
+	std::span<const std::uint8_t> script, std::int16_t raw_offset,
+	std::uint8_t &value
+) noexcept
+{
+	if((raw_offset < 0) ||
+		(static_cast<std::size_t>(raw_offset) >= script.size())) {
+		return false;
+	}
+	value = script[static_cast<std::size_t>(raw_offset)];
+	return true;
 }
 
 } // namespace
@@ -138,6 +161,88 @@ EnemySpawnResult enemies_spawn(EnemyPoolState &state, RandomState &random,
 	}
 	state.spawn_row_cur = add_word(state.spawn_row_cur, 1);
 	return EnemySpawnResult::completed;
+}
+
+EnemyMotionResult enemy_pos_update(Enemy &enemy, std::size_t page_back) noexcept
+{
+	if(page_back >= enemy.pos_on_page.size()) {
+		return EnemyMotionResult::invalid_page;
+	}
+
+	auto &position = enemy.pos_on_page[page_back];
+	position.x = add_word(position.x, enemy.velocity_x);
+	position.y = add_word(position.y, enemy.velocity_y);
+	return EnemyMotionResult::completed;
+}
+
+EnemyMotionResult enemy_pos_update_aimed(Enemy &enemy,
+	const PlayerFrameState &player_frame, std::span<const std::uint8_t> script,
+	std::size_t page_back
+) noexcept
+{
+	if(page_back >= enemy.pos_on_page.size()) {
+		return EnemyMotionResult::invalid_page;
+	}
+
+	std::uint8_t length{};
+	if(!script_byte_at(script, add_word(enemy.script_ip, 2), length)) {
+		return EnemyMotionResult::invalid_script_operand;
+	}
+
+	auto &position = enemy.pos_on_page[page_back];
+	const auto target_x = add_word(player_frame.player.current.x, 24);
+	const auto target_y = add_word(player_frame.player.current.y, 16);
+	const auto angle = pc98::masterlib::iatan2_source(
+		subtract_word(target_y, position.y), subtract_word(target_x, position.x)
+	);
+	if(!angle) return EnemyMotionResult::source_iatan2_fault;
+
+	const auto vector = pc98::masterlib::vector2(*angle, length);
+	enemy.velocity_x = narrow_signed_byte(vector.x);
+	enemy.velocity_y = narrow_signed_byte(vector.y);
+	position.x = add_word(position.x, vector.x);
+	position.y = add_word(position.y, vector.y);
+	return EnemyMotionResult::completed;
+}
+
+EnemyMotionResult enemy_angle_step_and_move(Enemy &enemy,
+	std::span<const std::uint8_t> script, std::int16_t operand,
+	std::int16_t sign, std::size_t page_back
+) noexcept
+{
+	if(page_back >= enemy.pos_on_page.size()) {
+		return EnemyMotionResult::invalid_page;
+	}
+
+	const auto ip = add_word(enemy.script_ip, operand);
+	std::uint8_t interval{};
+	if(!script_byte_at(script, add_word(ip, 1), interval)) {
+		return EnemyMotionResult::invalid_script_operand;
+	}
+	if(interval == 0U) return EnemyMotionResult::source_divide_fault;
+	if((enemy.age % interval) == 0) {
+		enemy.angle = add_word(enemy.angle, sign);
+	}
+
+	std::uint8_t base{};
+	if(!script_byte_at(script, ip, base)) {
+		return EnemyMotionResult::invalid_script_operand;
+	}
+	std::uint8_t speed{};
+	if(!script_byte_at(script, add_word(ip, 2), speed)) {
+		return EnemyMotionResult::invalid_script_operand;
+	}
+
+	const auto angle = static_cast<std::uint8_t>(
+		add_word(static_cast<std::int16_t>(base), enemy.angle)
+	);
+	const auto vector = pc98::masterlib::vector2(angle, speed);
+	auto &position = enemy.pos_on_page[page_back];
+	position.x = add_word(position.x, vector.x);
+	position.y = add_word(position.y, vector.y);
+	enemy.velocity_x = narrow_signed_byte(vector.x);
+	enemy.velocity_y = narrow_signed_byte(vector.y);
+	return EnemyMotionResult::completed;
 }
 
 std::optional<std::int16_t> enemy_hittest(
