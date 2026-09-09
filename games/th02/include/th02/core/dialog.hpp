@@ -4,10 +4,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include "th02/core/stage_state_fwd.hpp"
 
 namespace th02::core {
 
-struct Stage1State;
 struct ScoreEvents;
 
 struct DialogState {

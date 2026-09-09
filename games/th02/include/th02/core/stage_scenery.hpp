@@ -88,12 +88,13 @@ enum class StageSceneryPageResult : std::uint8_t {
 	invalid_page,
 };
 
-enum class Stage1SceneryResult : std::uint8_t {
+enum class StageSceneryResult : std::uint8_t {
 	idle,
 	updated,
 	pool_full,
 	invalid_page,
 };
+using Stage1SceneryResult = StageSceneryResult;
 
 // th02/main/stage/s1.cpp::stage_scenery_particle_add. A full pool does not
 // consume the random byte, matching the source's free-slot loop.
@@ -116,7 +117,7 @@ enum class Stage1SceneryResult : std::uint8_t {
 	std::int16_t scroll_line, StageSceneryCallbacks &callbacks) noexcept;
 
 // th02/main/stage/s2.cpp::stage_bg_flash_update. It is shared by the Stage 1
-// and Stage 2 callers; only the Stage 1 caller is implemented in this parcel.
+// and Stage 2 callers.
 void stage_bg_flash_update(StageBgFlashState &state,
 	std::uint16_t &palette_tone, RandomState &random,
 	StageSceneryCallbacks &callbacks) noexcept;
@@ -133,4 +134,13 @@ void stage_bg_flash_update(StageBgFlashState &state,
 	std::size_t page_back, std::int16_t scroll_line, bool reduce_effects,
 	StageSceneryCallbacks &callbacks) noexcept;
 
+// th02/main/stage/s2.cpp. Unlike Stage 1, spawn precedes flash update, the
+// clock is unsigned, and reduce_effects does not change its every-other-frame
+// spawn rate. Setup and clock are retained source globals, not reset here.
+[[nodiscard]] StageSceneryResult stage2_update_and_render(
+	StageSceneryPoolState &state, std::uint16_t &scenery_frame, std::uint8_t &setup,
+	StageBgFlashState &flash, std::uint16_t &palette_tone,
+	SparkUpdateParameters &spark_parameters, RandomState &random,
+	std::size_t page_back, std::int16_t scroll_line,
+	StageSceneryCallbacks &callbacks) noexcept;
 } // namespace th02::core

@@ -1,13 +1,12 @@
 #pragma once
 
 #include "th02/core/bullet_lifecycle.hpp"
+#include "th02/core/stage_state_fwd.hpp"
 
 #include <cstddef>
 #include <cstdint>
 
 namespace th02::core {
-
-struct Stage1State;
 
 // The presentation-only calls reached by stage/init.cpp::continue_resume().
 // `invalidate_bullet()` is the existing synchronous bullet-clear boundary;

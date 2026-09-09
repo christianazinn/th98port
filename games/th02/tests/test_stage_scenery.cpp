@@ -317,6 +317,43 @@ private:
 		callbacks.count_kind(EventKind::grcg_off) == 0U;
 }
 
+[[nodiscard]] bool test_stage2_order_and_wrap() noexcept
+{
+	StageSceneryPoolState state{};
+	std::uint16_t clock = 65535;
+	std::uint8_t setup = 7;
+	StageBgFlashState flash{};
+	flash.frame = 106;
+	flash.next_frame = 100;
+	std::uint16_t tone = 100;
+	SparkUpdateParameters sparks{};
+	RandomState random{};
+	// Spawn X uses word 0x0000, speed uses byte 0x00, then flash uses 0x0005.
+	random.ring[2] = 5;
+	Recorder callbacks;
+	if (stage2_update_and_render(state, clock, setup, flash, tone, sparks, random,
+		0, 0, callbacks) != StageSceneryResult::updated) return false;
+	if (clock != 0 || setup != 0 || sparks.acceleration_x != -1 ||
+		random.cursor != 3 || flash.next_frame != 125 || tone != 100) return false;
+	if (state.particles[0].left[0] != 45 || state.particles[0].top[0] != 19) return false;
+	if (callbacks.events[0].kind != EventKind::clip || callbacks.events[0].value2 != 416 ||
+		callbacks.count_kind(EventKind::color) != 1) return false;
+	callbacks = {};
+	if (stage2_update_and_render(state, clock, setup, flash, tone, sparks, random,
+		0, 0, callbacks) != StageSceneryResult::updated || clock != 1 || random.cursor != 3 ||
+		callbacks.count_kind(EventKind::clip) != 0) return false;
+	for (auto &particle : state.particles) particle.flag = stage_scenery_alive;
+	random.cursor = 0;
+	flash.frame = 0;
+	if (stage2_update_and_render(state, clock, setup, flash, tone, sparks, random,
+		0, 0, callbacks) != StageSceneryResult::pool_full || random.cursor != 1) return false;
+	clock = 2;
+	setup = 1;
+	callbacks = {};
+	return stage2_update_and_render(state, clock, setup, flash, tone, sparks, random,
+		2, 0, callbacks) == StageSceneryResult::invalid_page && clock == 3 && setup == 0 &&
+		callbacks.count_kind(EventKind::egc_off) == 1 && callbacks.count_kind(EventKind::grcg_off) == 0;
+}
 } // namespace
 
 int main()
@@ -343,6 +380,10 @@ int main()
 	}
 	if(!test_stage_invalid_page_prefix()) {
 		std::fputs("FAIL invalid page\n", stderr);
+		return EXIT_FAILURE;
+	}
+	if(!test_stage2_order_and_wrap()) {
+		std::fputs("FAIL stage2\n", stderr);
 		return EXIT_FAILURE;
 	}
 	return EXIT_SUCCESS;

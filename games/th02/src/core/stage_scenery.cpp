@@ -228,4 +228,29 @@ Stage1SceneryResult stage1_update_and_render(
 	return Stage1SceneryResult::updated;
 }
 
+StageSceneryResult stage2_update_and_render(
+	StageSceneryPoolState &state, std::uint16_t &scenery_frame, std::uint8_t &setup,
+	StageBgFlashState &flash, std::uint16_t &palette_tone,
+	SparkUpdateParameters &spark_parameters, RandomState &random,
+	std::size_t page_back, std::int16_t scroll_line,
+	StageSceneryCallbacks &callbacks) noexcept
+{
+	if (setup != 0) {
+		callbacks.grc_set_clip(playfield_left, 0, playfield_right, screen_bottom - 1);
+		setup = 0;
+		spark_parameters.acceleration_x = -1;
+	}
+	++scenery_frame;
+	StageSceneryAddResult added = StageSceneryAddResult::added;
+	if ((scenery_frame & 1) == 0) {
+		const auto left = static_cast<std::int16_t>((randring_next16(random) % 640U) + 48U);
+		added = stage_scenery_particle_add(state, random, left, 16);
+	}
+	stage_bg_flash_update(flash, palette_tone, random, callbacks);
+	callbacks.egc_off();
+	callbacks.grcg_set_color(3);
+	if (stage_scenery_particles_render(state, page_back, scroll_line, callbacks) == StageSceneryPageResult::invalid_page)
+		return StageSceneryResult::invalid_page;
+	return added == StageSceneryAddResult::pool_full ? StageSceneryResult::pool_full : StageSceneryResult::updated;
+}
 } // namespace th02::core

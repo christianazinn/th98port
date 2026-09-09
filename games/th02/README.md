@@ -478,3 +478,8 @@ nor the intro has yet been validated against a user replay.
 lifecycle and collision, all pattern groups, teleport history, real bullets,
 shot damage and defeat effects. Its post-dialogue setup is a separate exact
 suffix; the actual intro and Stage 2 schedule are not yet connected.
+
+`StageState` shares persistent gameplay ownership across stages; `Stage1State`
+is an alias, not a duplicated state. Stage 2 scenery reuses the common particle
+pool and lightning body while preserving its distinct spawn-before-flash RNG
+order and unsigned clock. Stage 2's enclosing schedule remains pending.
