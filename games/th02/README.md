@@ -289,3 +289,19 @@ synchronous spark callback. Its optional result is the source signed 16-bit
 damage word. Enemy spawn/template loading, script VM and firing, bullet
 allocation, HP/death/rewards, rendering, and stage scheduling remain separate;
 this is source-derived native coverage, not a playable or replay verifier.
+
+`core/bullet.hpp` and `core/bullet.cpp` now provide TH02's complete regular
+enemy `bullets_add_pellet()` allocation body. The typed 150-record packed pool
+retains both Q12.4 page positions plus all source-visible stale payload; a
+pellet write first uses raw pixels in its selected back-page words and then
+converts only that page after velocity succeeds. The function preserves the
+asymmetric clip/bomb/tuning prefix, signed word speed product/division,
+Easy counter, rank stack, all fixed/aimed/ring/random group expansions and
+their TH02 randring order. An unsupported raw group intentionally fills every
+available slot as identical aimed pellets. The established shared master.lib
+iatan2/vector helpers supply aimed and polar velocity without a TH03
+dependency; a modeled iatan2 fault leaves its already-written source prefix.
+Normal clip/bomb/Easy/full-pool paths complete normally, while host-invalid
+pages and the source fault are explicit results. Stage reset, 16x16 special
+bullets, update, invalidation, collision, rendering, bomb ownership, page
+scheduling, replay, and playable-session behavior remain separate.
