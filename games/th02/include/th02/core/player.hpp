@@ -74,12 +74,14 @@ struct PlayerShotStreamState {
 	bool operator==(const PlayerShotStreamState &) const = default;
 };
 
-// The state owned by TH02's 68-frame player miss body. The hit state owns
-// miss_active and the raw hit byte, the score owns lives/bombs, and the shot
-// stream owns shot_level; do not duplicate those globals here.
+// The state owned by TH02's 68-frame player miss body and its existing player
+// power surface. The hit state owns miss_active and the raw hit byte, the
+// score owns lives/bombs, and the shot stream owns shot_level; do not
+// duplicate those globals here.
 struct PlayerMissState {
 	std::uint8_t miss_frame{};
 	std::uint8_t power{};
+	std::int16_t power_overflow{};
 	std::int16_t playperf{};
 	std::uint8_t stage_miss_count{};
 	std::uint8_t total_miss_count{};

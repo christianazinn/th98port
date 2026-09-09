@@ -246,8 +246,9 @@ the source's one-big-power selection and short-circuit ring consumption;
 game-over drops are all big power with no ring reads. The trajectory is chosen
 from the separately supplied global player X rather than the item spawn left,
 including the inclusive 128/256 field boundaries and signed table widening.
-Item movement, collection, invalidation/rendering, miss/respawn composition,
-and stage scheduling remain unimplemented.
+This allocator itself does not update or collect those records; the later
+`items_lifecycle_step()` below owns that gameplay body. Item invalidation,
+rendering, miss/respawn composition, and stage scheduling remain separate.
 
 `items_add()` and `items_add_semirandom()` now provide the two ordinary item
 allocation bodies over that same pool. Direct adds consume a pending 16-bit
@@ -257,5 +258,22 @@ the raw record byte. Semirandom adds retain the source's override return,
 post-incremented byte cycle, no-RNG skips, one-cursor word `% 512` rare-bomb
 decision, and ten-byte power/point ring. A host ring pointer outside those ten
 bytes is refused only if its non-rare read is reached, retaining prior cycle
-and RNG work. Item movement, collection, invalidation/rendering, stage
-scheduling, replay, and playable-session behavior remain outside this parcel.
+and RNG work. Item movement and collection are supplied by
+`items_lifecycle_step()` below; invalidation/rendering, stage scheduling,
+replay, and playable-session behavior remain separate.
+
+`items_lifecycle_step()` now provides TH02's `items_update_and_render()` and
+`item_hittest_y()` gameplay state body. It updates raw-alive selected-back-page
+items with Q12.4 word math, preserves the inclusive collection windows and
+raw-hit gate, and concretely applies all five item resource/skill/score paths,
+source-sized counter wraps, and rank-scaled score-delta commit. The narrow
+state owns only item counters; the existing player-power state owns signed
+`power_overflow`, the score owns lives/bombs, and the shot stream owns shot
+level. The source's HUD, SFX, item sprite, point-number add, and unconditional
+point-number update calls are explicit synchronous presentation requests.
+Point-number allocation, aging, and rendering, item invalidation/page carry,
+scroll conversion, page flipping, stage scheduling, replay, and a playable
+session remain outside this slice. Invalid host page, shot-level, bonus-table,
+item-pattern, and nonzero-score rank states stop at their corresponding source
+read without rollback. Focused tests are source-derived native coverage, not
+oracle or gameplay-session validation.

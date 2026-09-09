@@ -8,6 +8,10 @@ namespace th02::core {
 
 struct RandomState;
 struct ScoreState;
+struct PlayerMissState;
+struct PlayerShotStreamState;
+struct PlayerFrameState;
+struct PlayerHitState;
 
 inline constexpr std::size_t item_count = 20U;
 inline constexpr int item_miss_count = 5;
@@ -64,6 +68,54 @@ struct ItemPoolState {
 	bool operator==(const ItemPoolState &) const = default;
 };
 
+// The globals that are specific to item update/collection rather than to the
+// persistent item records or the existing player, stream, score, and page
+// owners. Their host widths match the source globals.
+struct ItemLifecycleState {
+	std::int16_t frame_unused{};
+	std::int32_t item_score_this_frame{};
+	std::uint8_t drop_cycle{};
+	std::uint8_t collect_skill{};
+	std::int16_t item_skill{};
+	std::int16_t point_items_collected{};
+	bool operator==(const ItemLifecycleState &) const = default;
+};
+
+// This preserves the source item's logical screen-space render request. The
+// caller owns scroll-to-VRAM conversion and all actual rendering.
+struct ItemSprite {
+	std::int16_t left{};
+	std::int16_t top{};
+	std::uint8_t patnum{};
+	bool operator==(const ItemSprite &) const = default;
+};
+
+// Point-number state remains a later presentation owner. These callbacks are
+// synchronous source-position boundaries, not a deferred event queue or an
+// implicit implementation of the visual point-number pool.
+class ItemLifecyclePresentationCallbacks {
+public:
+	virtual ~ItemLifecyclePresentationCallbacks() = default;
+	virtual void hud_power(std::uint8_t power,
+		std::uint8_t shot_level) noexcept = 0;
+	virtual void hud_bombs(std::int8_t bombs) noexcept = 0;
+	virtual void hud_lives(std::int8_t lives) noexcept = 0;
+	virtual void sound_effect(std::uint8_t sound_id) noexcept = 0;
+	virtual void pointnum_add(std::int16_t left, std::int16_t top,
+		std::uint16_t points) noexcept = 0;
+	virtual void render_item(ItemSprite sprite) noexcept = 0;
+	virtual void pointnums_update_and_render() noexcept = 0;
+};
+
+enum class ItemLifecycleResult : std::uint8_t {
+	completed,
+	invalid_page,
+	unsupported_shot_level,
+	unsupported_power_overflow_index,
+	unsupported_item_patnum,
+	unsupported_rank,
+};
+
 // th02/main/item/item.cpp::items_miss_add. It scans source slots from 0 to 19
 // and initializes at most five F_FREE entries on both pages. source_player_x
 // models global player_topleft.x, deliberately separate from the left spawn
@@ -88,5 +140,22 @@ void items_add(ItemPoolState &state, const ScoreState &score,
 [[nodiscard]] bool items_add_semirandom(ItemPoolState &state,
 	RandomState &random, const ScoreState &score, std::int16_t left,
 	std::int16_t top) noexcept;
+
+// th02/main/item/item.cpp::items_update_and_render and item_hittest_y. This
+// models the source's movement, removal, collection, resource, skill, and
+// rank-scaled score writes over the selected back page. The raw signed byte
+// rank is the TH02 gameplay global, not resident rank_t. Native-invalid pages
+// refuse only after the source's frame/score prefix; a bonus-table or rank
+// refusal preserves the writes reached before that source expression. The
+// point-number add/update and item/HUD/SFX calls are synchronous presentation
+// boundaries; no visual point-number allocation, aging, rendering, page flip,
+// invalidation, scroll conversion, or stage scheduling is implied.
+[[nodiscard]] ItemLifecycleResult items_lifecycle_step(
+	ItemPoolState &items, ItemLifecycleState &lifecycle,
+	PlayerMissState &player_power, PlayerShotStreamState &stream,
+	ScoreState &score, const PlayerFrameState &frame,
+	const PlayerHitState &hit, std::int8_t rank,
+	ItemLifecyclePresentationCallbacks &presentation
+) noexcept;
 
 } // namespace th02::core

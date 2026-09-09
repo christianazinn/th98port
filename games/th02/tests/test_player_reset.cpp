@@ -11,7 +11,7 @@ struct ResetFixture {
 	PlayerResetState reset{0xA1U, 0xA2U, 0xA3U, 0xA4U};
 	bool quit{true};
 	PlayerHitState hit{0xFFU, 7U, true, true};
-	PlayerMissState miss{26U, 52U, -5, 8U, 9U, 4U};
+	PlayerMissState miss{26U, 52U, 0, -5, 8U, 9U, 4U};
 	PlayerShotPoolState shots{};
 	PlayerShotLifetimeState lifetime{};
 	PlayerShotStreamState stream{3U, 5U, 7U, 8U, 9U, 0xAAU, 0xBBU,

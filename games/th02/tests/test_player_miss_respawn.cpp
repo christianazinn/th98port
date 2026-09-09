@@ -62,7 +62,7 @@ public:
 };
 
 struct MissFixture {
-	PlayerMissState miss{0U, 80U, 2, 0U, 0U, 3U};
+	PlayerMissState miss{0U, 80U, 0, 2, 0U, 0U, 3U};
 	PlayerFrameState frame{};
 	PlayerHitState hit{1U, 0U, false, false};
 	PlayerShotStreamState stream{};
