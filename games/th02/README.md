@@ -456,3 +456,8 @@ acknowledgement, short-file text-buffer retention, and pre/post slide state.
 Delay requests are explicit rather than gameplay ticks: held input can type
 without waiting, while acknowledgement polls are separated by two frames.
 The enclosing boss script and actual text/sprite rasterization remain separate.
+
+`core/stage1_intro.hpp` connects Rika's music request, pre-slide, all 16
+source face/text boxes, post-slide and combat setup. The suspended stage frame
+then resumes through `stage1_frame_after_boss_init`, without an extra gameplay
+tick. Actual text/sprite rasterization and music playback remain host services.

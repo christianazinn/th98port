@@ -1,6 +1,7 @@
 #pragma once
 
 #include "th02/core/player_bomb_update.hpp"
+#include "th02/core/dialog.hpp"
 #include "th02/core/reset.hpp"
 #include "th02/core/scroll.hpp"
 #include "th02/core/stage1_entities.hpp"
@@ -20,6 +21,7 @@ namespace th02::core {
 // phases each retain their own exact setup contracts. Page ownership remains
 // solely in `frame`; current scrolling remains solely in `scroll`.
 struct Stage1State {
+	DialogState dialog{};
 	PlayerFrameState frame{};
 	PlayerHitState player_hit{};
 	PlayerMissState player_miss{};
