@@ -107,9 +107,10 @@ struct Fixture {
 	}
 };
 
-void add_plain_hit_shot(Fixture &fixture, ScreenPoint topleft) noexcept
+void add_plain_hit_shot(Fixture &fixture, ScreenPoint topleft,
+	std::size_t slot_index = 0U) noexcept
 {
-	auto &shot = fixture.shots.shots[0U];
+	auto &shot = fixture.shots.shots[slot_index];
 	shot.flag = player_shot_alive;
 	shot.decay_cel = 0U;
 	shot.pos_on_page[back_page] = {
@@ -185,12 +186,14 @@ void add_plain_hit_shot(Fixture &fixture, ScreenPoint topleft) noexcept
 	Fixture fixture{};
 	fixture.boss.phase_frame = 10;
 	fixture.boss.topleft_on_page[back_page] = {100, 100};
+	add_plain_hit_shot(fixture, {120, 120}, 1U);
 	add_plain_hit_shot(fixture, {120, 120});
 	if(midboss2_update_and_render(fixture.boss, fixture.state, fixture.context,
 		fixture.callbacks) != Midboss2UpdateResult::completed) {
 		return false;
 	}
 	return fixture.boss.phase_frame == 11 && fixture.boss.damage == 1 &&
+		fixture.score.score_delta == 2 &&
 		fixture.callbacks.event_count == 2U &&
 		fixture.callbacks.events[0U] == EventKind::sound &&
 		fixture.callbacks.events[1U] == EventKind::sprite &&
