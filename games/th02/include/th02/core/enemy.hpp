@@ -8,12 +8,19 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 
 namespace th02::core {
 
+struct RandomState;
+
 inline constexpr std::size_t enemy_page_count = 2U;
+inline constexpr std::size_t enemy_pool_size = 25U;
+inline constexpr std::size_t enemy_spawn_column_count = 49U;
 inline constexpr std::int16_t enemy_hittest_width = 32;
 inline constexpr std::int16_t enemy_hittest_height = 32;
+inline constexpr std::uint8_t enemy_free = 0U;
+inline constexpr std::uint8_t enemy_alive = 1U;
 
 // Raw source entity flags remain bytes. enemy_hittest() deliberately does not
 // inspect this field; the source caller filters alive/removing records before
@@ -80,6 +87,73 @@ struct EnemyTemplate {
 	std::uint32_t script_index{};
 	bool operator==(const EnemyTemplate &) const = default;
 };
+
+// Persistent source state owned by the stage-enemy subsystem. The bound is a
+// raw upper-exclusive byte, deliberately not recomputed by spawn; the source
+// has a distinct later invalidation pass for that work.
+struct EnemyPoolState {
+	std::array<Enemy, enemy_pool_size> enemies{};
+	std::uint8_t enemies_loop_bound{};
+	std::int16_t spawn_row_cur{};
+	bool operator==(const EnemyPoolState &) const = default;
+};
+
+// One decoded source spawn-grid row. Column 0 is a signed 16-bit scroll-step
+// key; columns 1 through 48 are byte-widened template IDs, with -1 as the
+// source's empty-cell sentinel.
+struct EnemySpawnRow {
+	std::array<std::int16_t, enemy_spawn_column_count> column{};
+	bool operator==(const EnemySpawnRow &) const = default;
+};
+
+// Borrowed decoded stage data, not a binary-loader format. source_row_count
+// is deliberately separate from rows.size(): native code checks the source
+// count first and only refuses when the source would actually dereference a
+// missing host row.
+struct EnemySpawnGrid {
+	std::span<const EnemySpawnRow> rows{};
+	std::int16_t source_row_count{};
+};
+
+// Caller-owned frame globals read by the spawn bodies. No page flip, scroll
+// advancement, midboss update, template loading, or stage scheduling occurs
+// in this surface.
+struct EnemySpawnContext {
+	std::int16_t scroll_step{};
+	bool midboss_active{};
+	std::size_t page_back{};
+};
+
+enum class EnemySpawnResult : std::uint8_t {
+	completed,
+	invalid_page,
+	invalid_slot,
+	invalid_row,
+	invalid_template,
+};
+
+// th02/main/enemy/update.cpp::enemies_reset. It frees only each raw enemy
+// flag and rewinds the spawn row; retained record payload and loop bound are
+// intentionally caller-visible source state.
+void enemies_reset(EnemyPoolState &state) noexcept;
+
+// th02/main/enemy/update.cpp::enemy_add. The caller supplies a slot already
+// selected by the spawn loop. It writes only the donor's spawn-time fields on
+// the selected back page, consumes exactly one shared-randring byte for the
+// animation frame, and widens the loop bound only on strict less-than.
+// template_id is stored raw: this body does not read a template.
+[[nodiscard]] EnemySpawnResult enemy_add(EnemyPoolState &state,
+	RandomState &random, std::int16_t left, std::int16_t top,
+	std::int16_t slot, std::int16_t template_id, std::size_t page_back) noexcept;
+
+// th02/main/enemy/update.cpp::enemies_spawn. It can consume exactly one
+// equality-triggered grid row per call. Each nonempty cell reads its template
+// spawn top before the midboss guard, then uses the first F_FREE slot. A full
+// pool and a midboss are ordinary no-spawn paths and consume no animation RNG.
+[[nodiscard]] EnemySpawnResult enemies_spawn(EnemyPoolState &state,
+	RandomState &random, const EnemySpawnGrid &grid,
+	std::span<const EnemyTemplate> templates,
+	const EnemySpawnContext &context) noexcept;
 
 // Source th02/main/enemy/update.cpp::enemy_hittest. The wrapper borrows all
 // player/shot/score state and performs native page/level refusal before the
