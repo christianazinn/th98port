@@ -129,14 +129,15 @@ private:
 	Recorder recorder{state};
 
 	if(stage1_continue_resume(state, recorder) != StageContinueResult::completed ||
-		recorder.count != 7U || !recorder.tile_callbacks_saw_source_prefix ||
+		recorder.count != 8U || !recorder.tile_callbacks_saw_source_prefix ||
 		recorder.events[0U] != Event{EventKind::hud} ||
 		recorder.events[1U] != Event{EventKind::leave} ||
 		recorder.events[2U] != Event{EventKind::tiles, 0U} ||
 		recorder.events[3U] != Event{EventKind::tiles, 1U} ||
 		recorder.events[4U] != Event{EventKind::bullet} ||
-		recorder.events[5U] != Event{EventKind::palette, 0U, 100U} ||
-		recorder.events[6U] != Event{EventKind::enter}) {
+		recorder.events[5U] != Event{EventKind::bullet} ||
+		recorder.events[6U] != Event{EventKind::palette, 0U, 100U} ||
+		recorder.events[7U] != Event{EventKind::enter}) {
 		return false;
 	}
 	return state.frame.player.on_page[0U] == ScreenPoint{208, 336} &&
