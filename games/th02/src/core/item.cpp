@@ -1,6 +1,7 @@
 #include "th02/core/item.hpp"
 
 #include "th02/core/random.hpp"
+#include "th02/core/score.hpp"
 
 #include <array>
 #include <bit>
@@ -10,6 +11,10 @@ namespace {
 
 constexpr std::int16_t miss_field_left_max = 128;
 constexpr std::int16_t miss_field_center_max = 256;
+constexpr std::int8_t lives_max = 5;
+constexpr std::int16_t item_bounce_velocity_y = -48;
+constexpr std::uint16_t semirandom_bomb_value = 18U;
+constexpr std::uint16_t semirandom_bomb_modulus = 512U;
 
 constexpr std::array<std::int8_t, item_miss_count> velocity_y_sides{
 	-80, -68, -56, -44, -32,
@@ -19,6 +24,18 @@ constexpr std::array<std::int8_t, item_miss_count> velocity_x_center{
 };
 constexpr std::array<std::int8_t, item_miss_count> velocity_y_center{
 	-56, -68, -80, -68, -56,
+};
+constexpr std::array<ItemType, 10U> semirandom_ring{
+	ItemType::power,
+	ItemType::point,
+	ItemType::power,
+	ItemType::point,
+	ItemType::point,
+	ItemType::power,
+	ItemType::power,
+	ItemType::point,
+	ItemType::point,
+	ItemType::power,
 };
 
 [[nodiscard]] std::int16_t to_subpixels(std::int16_t pixels) noexcept
@@ -43,6 +60,11 @@ constexpr std::array<std::int8_t, item_miss_count> velocity_y_center{
 	return static_cast<ItemType>(
 		randring_next8(random) % static_cast<std::uint8_t>(ItemType::bomb)
 	);
+}
+
+[[nodiscard]] ItemType narrow_item_type(std::int16_t type) noexcept
+{
+	return static_cast<ItemType>(static_cast<std::uint8_t>(type));
 }
 
 } // namespace
@@ -91,6 +113,70 @@ void items_miss_add(ItemPoolState &state, RandomState &random,
 		++items_added;
 		if(items_added >= item_miss_count) break;
 	}
+}
+
+void items_add(ItemPoolState &state, const ScoreState &score,
+	std::int16_t left, std::int16_t top, std::int16_t type
+) noexcept
+{
+	if((state.bigpower_override != 0U) &&
+		(type < static_cast<std::int16_t>(ItemType::bomb))) {
+		--state.bigpower_override;
+		type = static_cast<std::int16_t>(ItemType::big_power);
+	}
+
+	if((score.lives == lives_max) &&
+		(type == static_cast<std::int16_t>(ItemType::one_up))) {
+		type = static_cast<std::int16_t>(ItemType::bomb);
+	}
+
+	const auto spawn = ItemPosition{left, to_subpixels(top)};
+	for(auto &item : state.items) {
+		if(item.flag != item_free) continue;
+		item.flag = item_alive;
+		item.type = narrow_item_type(type);
+		item.position[0] = spawn;
+		item.position[1] = spawn;
+		item.velocity_y = item_bounce_velocity_y;
+		item.velocity_x_during_bounce = 0;
+		item.age = 0;
+		break;
+	}
+}
+
+bool items_add_semirandom(ItemPoolState &state, RandomState &random,
+	const ScoreState &score, std::int16_t left, std::int16_t top
+) noexcept
+{
+	if(state.bigpower_override != 0U) {
+		--state.bigpower_override;
+		items_add(state, score, left, top,
+			static_cast<std::int16_t>(ItemType::big_power));
+		return true;
+	}
+
+	const auto cycle = state.semirandom_cycle;
+	state.semirandom_cycle = static_cast<std::uint8_t>(cycle + 1U);
+	if((cycle % 3U) != 0U) return true;
+
+	const auto random_value = randring_next16(random);
+	if((random_value % semirandom_bomb_modulus) == semirandom_bomb_value) {
+		items_add(state, score, left, top,
+			static_cast<std::int16_t>(ItemType::bomb));
+	} else {
+		if(state.semirandom_ring_p >= semirandom_ring.size()) return false;
+		items_add(state, score, left, top, static_cast<std::int16_t>(
+			semirandom_ring[state.semirandom_ring_p]
+		));
+	}
+
+	state.semirandom_ring_p = static_cast<std::uint8_t>(
+		state.semirandom_ring_p + 1U
+	);
+	if(state.semirandom_ring_p >= semirandom_ring.size()) {
+		state.semirandom_ring_p = 0U;
+	}
+	return true;
 }
 
 } // namespace th02::core

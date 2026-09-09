@@ -248,3 +248,14 @@ from the separately supplied global player X rather than the item spawn left,
 including the inclusive 128/256 field boundaries and signed table widening.
 Item movement, collection, invalidation/rendering, miss/respawn composition,
 and stage scheduling remain unimplemented.
+
+`items_add()` and `items_add_semirandom()` now provide the two ordinary item
+allocation bodies over that same pool. Direct adds consume a pending 16-bit
+big-power override before scanning for a slot, convert a one-up only at exactly
+five lives, preserve Q12.4 top wrapping, and narrow the source `int` type to
+the raw record byte. Semirandom adds retain the source's override return,
+post-incremented byte cycle, no-RNG skips, one-cursor word `% 512` rare-bomb
+decision, and ten-byte power/point ring. A host ring pointer outside those ten
+bytes is refused only if its non-rare read is reached, retaining prior cycle
+and RNG work. Item movement, collection, invalidation/rendering, stage
+scheduling, replay, and playable-session behavior remain outside this parcel.

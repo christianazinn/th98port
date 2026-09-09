@@ -7,6 +7,7 @@
 namespace th02::core {
 
 struct RandomState;
+struct ScoreState;
 
 inline constexpr std::size_t item_count = 20U;
 inline constexpr int item_miss_count = 5;
@@ -51,12 +52,15 @@ static_assert(offsetof(Item, velocity_y) == 10U);
 static_assert(offsetof(Item, velocity_x_during_bounce) == 12U);
 static_assert(offsetof(Item, age) == 14U);
 
-// The pool and the global mode consumed by items_miss_add(). Item update,
-// collection, invalidation, rendering, and the caller's temporary writes to
-// miss_add_gameover remain separate source contracts.
+// The pool and source globals consumed by the three completed allocation
+// bodies. Item update, collection, invalidation, rendering, and the caller's
+// temporary writes to miss_add_gameover remain separate source contracts.
 struct ItemPoolState {
 	std::array<Item, item_count> items{};
+	std::uint16_t bigpower_override{};
 	bool miss_add_gameover{};
+	std::uint8_t semirandom_ring_p{};
+	std::uint8_t semirandom_cycle{};
 	bool operator==(const ItemPoolState &) const = default;
 };
 
@@ -67,5 +71,22 @@ struct ItemPoolState {
 void items_miss_add(ItemPoolState &state, RandomState &random,
 	std::int16_t left, std::int16_t top,
 	std::int16_t source_player_x) noexcept;
+
+// th02/main/item/item.cpp::items_add. The parameter order follows the source
+// definition, not its stale header declaration. It consumes a pending
+// big-power override before the free-slot scan, converts a one-up only when
+// lives equals the source maximum, and narrows the source int type to the
+// record's raw byte. A full pool therefore still observes the prefix writes.
+void items_add(ItemPoolState &state, const ScoreState &score,
+	std::int16_t left, std::int16_t top, std::int16_t type) noexcept;
+
+// th02/main/item/item.cpp::items_add_semirandom. A true result includes the
+// source's cycle skip and a full-pool direct-add attempt. False is the bounded
+// native refusal at an actually reached non-rare semirandom-ring read whose
+// byte index is outside the ten-entry source table; its prior cycle/RNG writes
+// remain observable. No item update or collection behavior is implied.
+[[nodiscard]] bool items_add_semirandom(ItemPoolState &state,
+	RandomState &random, const ScoreState &score, std::int16_t left,
+	std::int16_t top) noexcept;
 
 } // namespace th02::core
