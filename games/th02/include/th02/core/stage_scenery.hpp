@@ -63,6 +63,10 @@ struct StageSceneryInvalidation {
 class StageSceneryCallbacks {
 public:
 	virtual ~StageSceneryCallbacks() = default;
+	// Optional presentation notifications, like TH03's gameplay observer.
+	// Headless sinks may ignore them; neither supplies gameplay results.
+	virtual void sound_effect(std::uint8_t) noexcept {}
+	virtual void graph_scroll(std::uint16_t, std::uint16_t, std::uint16_t) noexcept {}
 	virtual void invalidate_scenery(
 		StageSceneryInvalidation invalidation) noexcept = 0;
 	virtual void palette_set(std::uint8_t index,

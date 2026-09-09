@@ -3,6 +3,7 @@
 #include "th02/core/stage1_state.hpp"
 
 #include <array>
+#include <span>
 
 namespace th02::core {
 namespace {
@@ -10,24 +11,34 @@ namespace {
 // th02_main.asm GENERIC_FACES[0], using face.hpp's 3x3 tile top-left IDs.
 constexpr std::array<std::uint8_t, 16> faces{0, 96, 51, 96, 9, 96, 0, 96,
 	99, 99, 48, 12, 99, 99, 6, 99};
+constexpr std::array<std::uint8_t, 8> stones_faces{6, 96, 96, 12, 96, 51, 96, 0};
 
 Stage1IntroWait advance(Stage1State &state, Stage1IntroState &intro,
 	Stage1IntroPresentation &presentation) noexcept
 {
+	const std::span<const std::uint8_t> sequence = intro.stones ?
+		std::span<const std::uint8_t>(stones_faces) : std::span<const std::uint8_t>(faces);
 	if (intro.phase == Stage1IntroPhase::pre_slide && intro.slide.phase == DialogSlidePhase::complete) {
 		intro.sequence_index = 0;
-		dialog_box_begin(state.dialog, intro.box, faces[0], presentation);
+		dialog_box_begin(state.dialog, intro.box, sequence[0], presentation);
 		intro.phase = Stage1IntroPhase::boxes;
 	} else if (intro.phase == Stage1IntroPhase::boxes && intro.box.phase == DialogBoxPhase::complete) {
 		++intro.sequence_index;
-		if (intro.sequence_index < faces.size()) {
-			dialog_box_begin(state.dialog, intro.box, faces[intro.sequence_index], presentation);
+		if (intro.sequence_index < sequence.size()) {
+			dialog_box_begin(state.dialog, intro.box, sequence[intro.sequence_index], presentation);
 		} else {
 			(void)dialog_post_begin(state, intro.slide, presentation);
 			intro.phase = Stage1IntroPhase::post_slide;
 		}
 	} else if (intro.phase == Stage1IntroPhase::post_slide && intro.slide.phase == DialogSlidePhase::complete) {
-		rika_combat_setup_after_dialogue(state.boss, state.rika, state.stage_frame,
+		if (intro.stones) {
+			presentation.music_stop();
+			presentation.music_load("boss2.m");
+			presentation.music_play();
+			stones_combat_reset(state.boss, state.stones, state.lasers, state.rank, state.scroll.line);
+			enemies_remove_all(state.enemies);
+			state.lasers_enabled = true;
+		} else rika_combat_setup_after_dialogue(state.boss, state.rika, state.stage_frame,
 			state.lasers_enabled, state.scroll.line, state.rank);
 		intro.phase = Stage1IntroPhase::complete;
 	}
@@ -66,6 +77,16 @@ Stage1IntroWait stage1_intro_begin(Stage1State &state, Stage1IntroState &intro,
 	presentation.music_stop();
 	presentation.music_load("boss1.m");
 	presentation.music_play();
+	intro.phase = Stage1IntroPhase::pre_slide;
+	(void)dialog_pre_begin(state, state.dialog, intro.slide, presentation);
+	return advance(state, intro, presentation);
+}
+
+Stage1IntroWait stage3_intro_begin(StageState &state, Stage1IntroState &intro,
+	Stage1IntroPresentation &presentation) noexcept
+{
+	intro = {};
+	intro.stones = true;
 	intro.phase = Stage1IntroPhase::pre_slide;
 	(void)dialog_pre_begin(state, state.dialog, intro.slide, presentation);
 	return advance(state, intro, presentation);

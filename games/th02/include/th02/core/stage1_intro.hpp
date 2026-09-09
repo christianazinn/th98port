@@ -12,6 +12,7 @@ enum class Stage1IntroWait : std::uint8_t {
 	delay_two_frames, acknowledgement_second_sample, complete, refused,
 };
 struct Stage1IntroState {
+	bool stones{};
 	Stage1IntroPhase phase{Stage1IntroPhase::idle};
 	DialogSlideState slide{};
 	DialogBoxState box{};
@@ -29,6 +30,8 @@ public:
 // Actual rika_init sequence: BGM, dialog_pre, all16 generic boxes, dialog_post,
 // then the real combat setup suffix. The source dialog cursor is not reset.
 [[nodiscard]] Stage1IntroWait stage1_intro_begin(Stage1State &state,
+	Stage1IntroState &intro, Stage1IntroPresentation &presentation) noexcept;
+[[nodiscard]] Stage1IntroWait stage3_intro_begin(StageState &state,
 	Stage1IntroState &intro, Stage1IntroPresentation &presentation) noexcept;
 [[nodiscard]] Stage1IntroWait stage1_intro_after_delay(Stage1State &state,
 	Stage1IntroState &intro, Stage1IntroPresentation &presentation) noexcept;

@@ -28,6 +28,8 @@ void gameplay_options_apply(Stage1State &state, bool reduce_effects,
 // before mutation, and retains Meira/M2/scenery private state as the source does.
 [[nodiscard]] bool stage2_setup_before_assets(StageState &state, bool demo,
 	Stage1SetupPresentation &presentation) noexcept;
+[[nodiscard]] bool stage3_setup_before_assets(StageState &state, bool demo,
+	Stage1SetupPresentation &presentation) noexcept;
 
 // Call after actual stage assets/map/script/dialogue loading and tiles reset.
 // Installs Stage1's represented callbacks and resets only the source player

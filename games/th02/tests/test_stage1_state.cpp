@@ -4,6 +4,7 @@
 #include "th02/core/stage1_setup.hpp"
 #include "th02/core/stage1_run.hpp"
 #include "th02/core/stage2_run.hpp"
+#include "th02/core/stage3_run.hpp"
 
 #include <cstdlib>
 #include <vector>
@@ -13,7 +14,7 @@ namespace {
 using namespace th02::core;
 
 class Trace final : public EnemyUpdateCallbacks, public RikaCallbacks,
-	public MeiraCallbacks, public Midboss2Callbacks,
+	public MeiraCallbacks, public Midboss2Callbacks, public StonesCallbacks,
 	public Midboss1Callbacks, public EnemyInvalidationCallbacks,
 	public PlayerFrameInvalidationCallbacks,
 	public LaserInvalidationCallbacks, public ItemScheduleCallbacks,
@@ -92,6 +93,8 @@ public:
 	void render_rika(RikaSprite) noexcept override {}
 	void invalidate_meira(MeiraInvalidation) noexcept override {}
 	void render_meira(MeiraSprite) noexcept override {}
+	void render_stone(StonesSprite) noexcept override {}
+	void put_takeover_tile(std::int16_t, std::int16_t, std::int16_t) noexcept override {}
 	void invalidate_midboss(Midboss2Invalidation) noexcept override {}
 	void render_midboss(Midboss2Sprite) noexcept override {}
 	void explosion_margins_clear() noexcept override {}
@@ -615,6 +618,79 @@ void set_valid_pages(Stage1State &state) noexcept
 		state.stage_frame == 36 && state.resident_frame == 36 && state.dialog.box_current == 35;
 }
 
+[[nodiscard]] bool test_stage3_run_driver() noexcept
+{
+	Stage1State state{};
+	Stage3RunState run{};
+	Trace trace{};
+	auto old_invalidation = invalidation_presentation(trace);
+	Stage3InvalidationPresentation invalidation{trace, trace, trace, trace, old_invalidation.bullets, trace, trace, trace, trace};
+	Stage3EntitiesPresentation entities{trace, trace, trace, trace, trace, trace, trace};
+	Stage3RunPresentation presentation{trace, invalidation, trace, trace, trace,
+		entities, trace, trace, trace};
+	state.stage_id = 2;
+	state.stage2_scenery_setup = 1;
+	state.max_enemy_vm_steps = 64;
+	if (!stage3_setup_before_assets(state, false, trace)) return false;
+	state.stage_data.map_length = 4;
+	tiles_stuff_reset(state.tiles, state.frame.page_back, state.tile_mode, state.tiles_egc_render_all);
+	stage1_setup_after_assets(state, run.frame, run.stage_title_enabled);
+	if (!stage1_setup_items_and_score(state, trace)) return false;
+	if (tiles_fill_and_put_initial(state.tiles, state.stage_data, state.tile_sections, trace) != TileScrollResult::completed) return false;
+	state.frame.page_front = 1;
+	state.frame.page_back = 0;
+	state.scroll_line_on_page = {88, 99};
+	for (std::uint32_t frame = 0; frame < 32; ++frame) {
+		if (stage3_run_prepare(state, run, presentation) != Stage1RunWait::input_sample) return false;
+		if (frame == 0 && trace.tile_line != 0) return false;
+		const auto calls = trace.tile_calls;
+		if (stage3_run_prepare(state, run, presentation) != Stage1RunWait::input_sample || trace.tile_calls != calls) return false;
+		if (stage3_run_input(state, run, 0, presentation) != Stage1RunWait::ready_for_frame) return false;
+		if (state.stage_frame != frame + 1 || state.resident_frame != static_cast<std::int32_t>(frame + 1)) return false;
+		if (stage3_run_input(state, run, 0, presentation) != Stage1RunWait::ready_for_frame || state.stage_frame != frame + 1) return false;
+	}
+	for (unsigned pause = 0; pause < 2; ++pause) {
+		const auto frame = state.stage_frame;
+		if (stage3_run_prepare(state, run, presentation) != Stage1RunWait::input_sample) return false;
+		if (stage3_run_input(state, run, 0x40, presentation) != Stage1RunWait::paused) return false;
+		const auto updates = trace.sound_updates;
+		if (stage3_run_prepare(state, run, presentation) != Stage1RunWait::paused || trace.sound_updates != updates) return false;
+		if (state.stage_frame != frame || stage3_run_after_pause(state, run, false, presentation) != Stage1RunWait::ready_for_frame) return false;
+		if (state.stage_frame != frame + 1) return false;
+	}
+	// Reach the genuine boss-activation path using a constructed end-of-map
+	// boundary, then run the complete intro without a caller bypass.
+	state.scroll.done = true;
+	if (stage3_run_prepare(state, run, presentation) != Stage1RunWait::input_sample) return false;
+	if (stage3_run_input(state, run, 0, presentation) != Stage1RunWait::delay_one_frame) return false;
+	const auto finish_dialogue = [&]() {
+		for (unsigned call = 0; call < 2000; ++call) {
+			const auto wait = stage3_run_wait(run);
+			if (wait == Stage1RunWait::ready_for_frame || wait == Stage1RunWait::cleared) return true;
+			if (wait == Stage1RunWait::delay_one_frame || wait == Stage1RunWait::delay_two_frames)
+				(void)stage3_run_after_delay(state, run, presentation);
+			else if (wait == Stage1RunWait::input_sample) (void)stage3_run_input(state, run, 0x10, presentation);
+			else if (wait == Stage1RunWait::acknowledgement_first_sample || wait == Stage1RunWait::acknowledgement_second_sample) {
+				const bool released = run.phase == Stage1RunPhase::intro ? run.intro.box.acknowledgement_released :
+					(run.ending.phase == Stage1EndPhase::boxes ? run.ending.box.acknowledgement_released : run.ending.released);
+				(void)stage3_run_acknowledgement(state, run, released, presentation);
+			} else return false;
+		}
+		return false;
+	};
+	if (!finish_dialogue() || state.stage_frame != 35 || state.resident_frame != 35 ||
+		!state.boss_enabled || state.dialog.box_current != 8 || trace.intro_music_requests != 1) return false;
+	// Construct the last defeat-animation frame; the real Stones update returns
+	// clear, and the driver must execute—not bypass—the closing sequence.
+	state.boss.phase = 1;
+	state.stones.flag.fill(4);
+	if (stage3_run_prepare(state, run, presentation) != Stage1RunWait::input_sample) return false;
+	if (stage3_run_input(state, run, 0, presentation) != Stage1RunWait::delay_one_frame || run.phase != Stage1RunPhase::ending) return false;
+	if (!finish_dialogue()) return false;
+	return stage3_run_wait(run) == Stage1RunWait::cleared && state.stage_id == 3 &&
+		state.stage_frame == 36 && state.resident_frame == 36 && state.dialog.box_current == 11;
+}
+
 [[nodiscard]] bool test_run_early_quit_and_refusal() noexcept
 {
 	Stage1State state{};
@@ -648,7 +724,7 @@ int main()
 		!test_prepare_interval_refusal_prefix() || !test_notifications() ||
 		!test_setup_retains_and_sequences(false) || !test_setup_retains_and_sequences(true) || !test_setup_options_and_demo() ||
 		!test_connected_frame() || !test_initial_tile_ring() ||
-		!test_run_driver() || !test_stage2_run_driver() || !test_run_early_quit_and_refusal()) {
+		!test_run_driver() || !test_stage2_run_driver() || !test_stage3_run_driver() || !test_run_early_quit_and_refusal()) {
 		return EXIT_FAILURE;
 	}
 	return EXIT_SUCCESS;

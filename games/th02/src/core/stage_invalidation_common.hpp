@@ -26,4 +26,25 @@ Stage1InvalidationResult stage_common_invalidate(C &c, P &p) noexcept
 	bomb_invalidate(c.bomb, c.shottype, p.bomb);
 	return Stage1InvalidationResult::completed;
 }
+template<class State, class Presentation>
+Stage1InvalidationResult stage_common_invalidate_state(State &s, Presentation &p) noexcept
+{
+	struct CommonView {
+		EnemyPoolState &enemies;
+		PlayerFrameState &frame;
+		PlayerShotPoolState &shots;
+		PlayerShotLifetimeState &shot_lifetime;
+		EnemyBulletPoolState &bullets;
+		LaserPoolState &lasers;
+		ItemPoolState &items;
+		SparkPoolState &sparks;
+		BombState &bomb;
+		bool enemies_enabled, lasers_enabled, reduce_effects;
+		std::uint8_t shottype;
+		std::uint32_t stage_frame;
+	} common{s.enemies, s.frame, s.player_shots, s.player_shot_lifetime,
+		s.bullets, s.lasers, s.items, s.sparks, s.bomb, s.enemies_enabled,
+		s.lasers_enabled, s.reduce_effects, s.shottype, s.stage_frame};
+	return stage_common_invalidate(common, p);
+}
 } // namespace th02::core::detail

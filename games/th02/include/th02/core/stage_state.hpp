@@ -4,6 +4,9 @@
 #include "th02/core/stage_state_fwd.hpp"
 #include "th02/core/meira.hpp"
 #include "th02/core/midboss2.hpp"
+#include "th02/core/midboss3.hpp"
+#include "th02/core/stones.hpp"
+#include "th02/core/stage3_effect.hpp"
 #include "th02/core/dialog.hpp"
 #include "th02/core/reset.hpp"
 #include "th02/core/scroll.hpp"
@@ -60,6 +63,9 @@ struct StageState {
 	Midboss1State midboss{};
 	MeiraState meira{};
 	Midboss2State midboss2{};
+	Midboss3State midboss3{};
+	StonesState stones{};
+	Stage3EffectState stage3_effect{};
 	std::uint16_t stage2_scenery_frame{};
 	std::uint8_t stage2_scenery_setup{};
 

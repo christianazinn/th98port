@@ -28,6 +28,10 @@ bool stage_setup_before_assets(StageState &state, bool demo,
 	bomb_reset(state.bomb);
 	presentation.sound_effects_reset();
 	state.boss.phase_frame = 0;
+	state.stones.damage.fill(0);
+	state.stones.flag.fill(0);
+	state.stones.hit_flash.fill(0);
+	state.stage3_effect.frame = 0;
 	state.boss.phase = 0;
 	state.boss.damage = 0;
 	scroll_reset(state.scroll);
@@ -61,6 +65,12 @@ bool stage2_setup_before_assets(StageState &state, bool demo,
 	Stage1SetupPresentation &presentation) noexcept
 {
 	return state.stage_id == 1U && stage_setup_before_assets(state, demo, presentation);
+}
+
+bool stage3_setup_before_assets(StageState &state, bool demo,
+	Stage1SetupPresentation &presentation) noexcept
+{
+	return state.stage_id == 2U && stage_setup_before_assets(state, demo, presentation);
 }
 
 void stage1_setup_after_assets(Stage1State &state, Stage1FrameSchedule &schedule,

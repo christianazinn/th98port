@@ -1,10 +1,10 @@
 #pragma once
 
-#include "th02/core/stage2_prepare.hpp"
+#include "th02/core/stage3_prepare.hpp"
 
 namespace th02::core::detail {
 // Compile-time stage dispatch shares the source loop without gameplay callbacks.
-template<bool Stage2, class Invalidation>
+template<unsigned Stage, class Invalidation>
 Stage1PreparationResult stage_prepare(StageState &state, Invalidation &invalidation,
 	Stage1PreparationPresentation &presentation) noexcept
 {
@@ -13,7 +13,8 @@ Stage1PreparationResult stage_prepare(StageState &state, Invalidation &invalidat
 		return Stage1PreparationResult::invalid_page;
 	state.scroll.line = state.scroll_line_on_page[state.frame.page_back];
 	Stage1InvalidationResult invalidated;
-	if constexpr (Stage2) invalidated = stage2_invalidate(state, invalidation);
+	if constexpr (Stage == 2) invalidated = stage3_invalidate(state, invalidation);
+	else if constexpr (Stage == 1) invalidated = stage2_invalidate(state, invalidation);
 	else invalidated = stage1_invalidate(state, invalidation);
 	if (invalidated != Stage1InvalidationResult::completed)
 		return Stage1PreparationResult::invalidation_refused;
@@ -30,13 +31,20 @@ Stage1PreparationResult stage_prepare(StageState &state, Invalidation &invalidat
 		state.scroll.step_advanced = 0;
 	}
 	presentation.egc_begin();
-	if (stage_scenery_invalidate(state.scenery, state.frame.page_back,
+	if constexpr (Stage == 2) {
+		if (!stage3_invalidate(state.stage3_effect, state.frame.page_back, presentation))
+			return Stage1PreparationResult::scenery_refused;
+	} else if (stage_scenery_invalidate(state.scenery, state.frame.page_back,
 		state.frame.page_front, presentation) != StageSceneryPageResult::completed)
 		return Stage1PreparationResult::scenery_refused;
 	presentation.tiles_render(state);
 	state.tiles_egc_render_all = false;
 	StageSceneryResult scenery_result;
-	if constexpr (Stage2) {
+	if constexpr (Stage == 2) {
+		scenery_result = stage3_update_and_render(state.stage3_effect, state.frame.page_back,
+			state.scroll.line, state.bomb_animation.slowdown_factor,
+			state.bomb_animation.palette_tone, presentation) ? StageSceneryResult::updated : StageSceneryResult::invalid_page;
+	} else if constexpr (Stage == 1) {
 		scenery_result = stage2_update_and_render(state.scenery, state.stage2_scenery_frame,
 			state.stage2_scenery_setup, state.stage_bg_flash, state.bomb_animation.palette_tone,
 			state.spark_parameters, state.random, state.frame.page_back, state.scroll.line, presentation);
@@ -48,7 +56,7 @@ Stage1PreparationResult stage_prepare(StageState &state, Invalidation &invalidat
 	if (scenery_result == StageSceneryResult::invalid_page)
 		return Stage1PreparationResult::scenery_refused;
 	presentation.egc_off();
-	if (state.scroll.step == (Stage2 ? 80 : 116)) state.midboss_active = 1;
+	if (state.scroll.step == (Stage == 2 ? 103 : Stage == 1 ? 80 : 116)) state.midboss_active = 1;
 	if (!scroll_advance_line(state.scroll, saved_line))
 		return Stage1PreparationResult::scroll_interval_zero;
 	state.scroll_line_on_page[state.frame.page_back] = state.scroll.line;

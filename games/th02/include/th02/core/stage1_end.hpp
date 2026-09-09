@@ -4,7 +4,7 @@
 
 namespace th02::core {
 struct StageClearBonusTally;
-enum class StageEndBoss : std::uint8_t { rika, meira };
+enum class StageEndBoss : std::uint8_t { rika, meira, stones };
 
 enum class Stage1EndPhase : std::uint8_t {
 	idle, pre_slide, boxes, bonus_acknowledgement, end_acknowledgement,
@@ -44,6 +44,8 @@ public:
 	Stage1EndState &end, Stage1EndPresentation &presentation) noexcept;
 // Meira shares the continuation below, but has 11 boxes and retains flash.frame.
 [[nodiscard]] Stage1EndWait stage2_end_begin(StageState &state,
+	Stage1EndState &end, Stage1EndPresentation &presentation) noexcept;
+[[nodiscard]] Stage1EndWait stage3_end_begin(StageState &state,
 	Stage1EndState &end, Stage1EndPresentation &presentation) noexcept;
 [[nodiscard]] Stage1EndWait stage1_end_after_delay(Stage1State &state,
 	Stage1EndState &end, Stage1EndPresentation &presentation) noexcept;

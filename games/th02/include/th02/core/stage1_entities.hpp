@@ -26,6 +26,7 @@ enum class StageProgression : std::int16_t {
 // no following source call has run.
 enum class StageEntitiesResult : std::uint8_t {
 	completed,
+	stones_refused,
 	enemy_refused,
 	rika_refused,
 	meira_refused,

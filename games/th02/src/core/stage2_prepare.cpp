@@ -13,23 +13,7 @@ Stage1InvalidationResult stage2_invalidate(StageState &s,
 			return Stage1InvalidationResult::midboss_invalid_page;
 		s.midboss_active = s.midboss2.active;
 	}
-	struct CommonView {
-		EnemyPoolState &enemies;
-		PlayerFrameState &frame;
-		PlayerShotPoolState &shots;
-		PlayerShotLifetimeState &shot_lifetime;
-		EnemyBulletPoolState &bullets;
-		LaserPoolState &lasers;
-		ItemPoolState &items;
-		SparkPoolState &sparks;
-		BombState &bomb;
-		bool enemies_enabled, lasers_enabled, reduce_effects;
-		std::uint8_t shottype;
-		std::uint32_t stage_frame;
-	} common{s.enemies, s.frame, s.player_shots, s.player_shot_lifetime,
-		s.bullets, s.lasers, s.items, s.sparks, s.bomb, s.enemies_enabled,
-		s.lasers_enabled, s.reduce_effects, s.shottype, s.stage_frame};
-	return detail::stage_common_invalidate(common, p);
+	return detail::stage_common_invalidate_state(s, p);
 }
 Stage1PreparationResult stage2_prepare(StageState &state,
 	Stage2InvalidationPresentation &invalidation,
