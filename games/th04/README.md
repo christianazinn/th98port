@@ -1,20 +1,29 @@
-# TH04 native foundations
+# TH04 headless gameplay core
 
-This is an asset-free, partial core, not a playable game or replay verifier.
+This is a headless gameplay MVP, not a playable frontend or full replay verifier.
+Building and running unit tests does not require original assets.
 The connected player path covers movement, all four shot types and their power
 levels, hit/deathbomb/miss handling, item collection, and both character bombs.
 `State` owns their source globals; `Presentation` only receives notifications.
 Enemy scripts, STD spawning, bullets/gathers and score transfer now operate on
-that same state. Stage 1 connects those to map scrolling, its midboss and Orange.
-Modal flows and later-stage bosses remain incomplete. Passing synthetic tests
-does not establish replay parity.
+that same state. All six main stages and Extra connect map scrolling, midbosses
+and bosses, including the Mugetsu-to-Gengetsu handoff. Modal flows remain explicit
+host boundaries. Passing synthetic tests does not establish replay parity.
 
 `th04-headless --data DIR --demo2` exercises the original Stage 1 demo profile.
 `DIR` contains extracted ST00.STD, ST00.MAP and DEMO2.REC. Alternatively use
 `--input FILE` for low-byte input masks, one per tick, with `--rank`,
-`--character`, `--shot`, `--seed` and `--frames`; see `--help`. This tool is
-Stage-1-only, not a user replay verifier. It reports pause, dialog, Game Over
+`--character`, `--shot`, `--seed`, `--stage 1..7` and `--frames`; see `--help`.
+Stage 7 selects Extra rank. Each stage requires its ST0n.STD and ST0n.MAP,
+where n is the zero-based stage number. This is not a user replay verifier.
+It reports pause, dialog, Game Over
 and clear boundaries explicitly; it does not pretend missing modal logic ran.
+
+With tests enabled, `th04-stage-chain DIR 6` exercises all main stages across
+the 16 character/shot/difficulty profiles; `th04-stage-chain DIR extra` exercises
+all four Extra profiles. This fixture supplies invincibility, held shot and
+dialog acknowledgements. It is an integration test, not an original-game oracle
+or a faithful full-session controller (for example, it visits Stage 6 on Easy).
 
 Movement input, word motion updates, and the player boundary clamp are implemented, sharing direction
 application with TH05. The source owner is th04/main/player/move.cpp at ReC98

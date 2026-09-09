@@ -13,7 +13,8 @@ add_library(th05_core STATIC src/core/player.cpp src/core/item.cpp src/core/scor
 	src/core/std_run.cpp src/core/scroll.cpp src/core/stage_init.cpp
 	src/core/stage.cpp src/core/enemy.cpp src/core/bullet.cpp src/core/laser.cpp
 	src/core/boss.cpp src/core/stage_bonus.cpp src/core/stage_scenery.cpp
-	src/core/stage4_projectiles.cpp src/core/sword.cpp src/core/b6ball.cpp)
+	src/core/stage4_projectiles.cpp src/core/sword.cpp src/core/b6ball.cpp src/core/firewave.cpp
+	src/core/shinki_background.cpp src/core/midboss_extra.cpp)
 target_include_directories(th05_core PUBLIC include)
 target_link_libraries(th05_core PUBLIC pc98_numeric)
 if(MSVC)
@@ -43,7 +44,7 @@ if(BUILD_TESTING)
 	endif()
 	add_test(NAME th05-stage-chain-help COMMAND th05-stage-chain --help)
 	add_test(NAME th05-headless-help COMMAND th05-headless --help)
-	foreach(test IN ITEMS gameplay item shot_patterns bomb std scroll stage enemy bullet laser boss boss2 boss3 boss4 stage_bonus stage_scenery stage4_projectiles sword b6ball)
+	foreach(test IN ITEMS gameplay item shot_patterns bomb std scroll stage enemy bullet laser boss boss2 boss3 boss4 boss5 boss6 boss_extra stage_bonus stage_scenery stage4_projectiles sword b6ball firewave shinki_background midboss_extra midboss_lifecycle)
 		string(REPLACE "_" "-" name "${test}")
 		add_executable(th05-${name}-tests tests/test_${test}.cpp)
 		target_link_libraries(th05-${name}-tests PRIVATE th05_core)

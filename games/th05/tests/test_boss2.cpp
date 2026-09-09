@@ -16,6 +16,7 @@ struct Trace final : Presentation {
 	std::uint16_t hp{};
 	std::uint16_t hp_total{};
 	std::vector<Point> pointnums{};
+	std::vector<std::uint16_t> point_values{};
 
 	void sound(std::uint8_t id) noexcept override { sounds.push_back(id); }
 	void boss_hp(std::int16_t value, std::int16_t total) noexcept override
@@ -23,9 +24,10 @@ struct Trace final : Presentation {
 		hp = static_cast<std::uint16_t>(value);
 		hp_total = static_cast<std::uint16_t>(total);
 	}
-	void pointnum(Point point, std::uint16_t, bool) noexcept override
+	void pointnum(Point point, std::uint16_t value, bool) noexcept override
 	{
 		pointnums.push_back(point);
+		point_values.push_back(value);
 	}
 };
 
@@ -101,7 +103,8 @@ struct Trace final : Presentation {
 	if(
 		state.midboss.phase != 2U || state.midboss.phase_frame != 0 ||
 		state.midboss.sprite != 206U || state.resources.bullet_clear_time != 20U ||
-		state.score.score_delta != 5000U || trace.pointnums.size() != 5U ||
+		state.score.score_delta != 6400U || trace.pointnums.size() != 5U ||
+		trace.point_values != std::vector<std::uint16_t>(5, 1280) ||
 		trace.sounds.back() != 15U || state.midboss.pos.velocity == Point{}
 	) return false;
 
@@ -112,7 +115,8 @@ struct Trace final : Presentation {
 	if(!stage2_fights_update(state, trace)) return false;
 	if(
 		state.midboss.phase != 254U || state.midboss.sprite != 4U ||
-		!state.bullets.zap.active() || state.score.score_delta != 20000U ||
+		!state.bullets.zap.active() || state.score.score_delta != 25600U ||
+		trace.point_values != std::vector<std::uint16_t>(20, 1280) ||
 		trace.pointnums.size() != 20U || trace.sounds.back() != 12U
 	) return false;
 

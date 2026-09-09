@@ -1,8 +1,12 @@
 #include "th05/core/boss.hpp"
+#include "th05/core/b6ball.hpp"
 #include "th05/core/bullet.hpp"
+#include "th05/core/firewave.hpp"
 #include "th05/core/item.hpp"
 #include "th05/core/laser.hpp"
+#include "th05/core/midboss_extra.hpp"
 #include "th05/core/stage4_projectiles.hpp"
+#include "th05/core/sword.hpp"
 #include "th05/core/shot_collision.hpp"
 #include "th05/core/state.hpp"
 #include "pc98/masterlib_iatan2.hpp"
@@ -47,6 +51,32 @@ constexpr std::uint8_t pat_midboss2_entrance = 202U;
 constexpr std::uint8_t pat_midboss2_attack = 206U;
 constexpr std::uint8_t pat_bullet16_vector_red = 84U;
 constexpr std::uint8_t pat_bullet16_vector_blue = 116U;
+constexpr std::uint8_t pat_bullet16_directional_blue = 52U;
+constexpr std::uint8_t pat_bullet16_directional_green = 68U;
+constexpr std::uint8_t pat_yumeko_still = 180U;
+constexpr std::uint8_t pat_yumeko_cast = 184U;
+constexpr std::uint8_t pat_yumeko_fly = 188U;
+constexpr std::uint8_t pat_yumeko_secondary = 192U;
+constexpr std::uint8_t pat_midboss5_first = 212U;
+constexpr std::uint8_t pat_midboss5_last = 219U;
+constexpr std::uint8_t pat_shinki_still = 180U;
+constexpr std::uint8_t pat_shinki_cast = 184U;
+constexpr std::uint8_t pat_shinki_right = 188U;
+constexpr std::uint8_t pat_shinki_left = 190U;
+constexpr std::uint8_t pat_shinki_wings_white = 192U;
+constexpr std::uint8_t pat_shinki_wings_purple = 196U;
+constexpr std::int16_t shinki_hp_total = 22800;
+constexpr std::int16_t shinki_phase_2_end_hp = 20600;
+constexpr std::int16_t shinki_phase_3_end_hp = 18400;
+constexpr std::int16_t shinki_phase_6_end_hp = 14600;
+constexpr std::int16_t shinki_phase_7_end_hp = 11600;
+constexpr std::int16_t shinki_phase_9_end_hp = 8600;
+constexpr std::int16_t shinki_phase_10_devil_laser_hp = 5600;
+constexpr std::int16_t shinki_phase_10_devil_fast_hp = 3800;
+constexpr std::int16_t shinki_phase_10_end_hp = 2800;
+constexpr std::int16_t shinki_phase_12_end_hp = 0;
+constexpr std::int16_t shinki_wing_width = 256 * subpixel_factor;
+constexpr std::int16_t shinki_wing_height = 96 * subpixel_factor;
 constexpr std::uint8_t pat_louise = 180U;
 constexpr std::uint8_t pat_louise_charge = 184U;
 constexpr std::uint8_t pat_louise_fire = 188U;
@@ -244,9 +274,9 @@ void boss_hittest_player(State &state) noexcept
 	return midboss_hittest_damage(state, presentation, {192, 192}, 10U, damage);
 }
 [[nodiscard]] bool score_bonus(State &state, Presentation &presentation, BossPoint center,
-							   std::uint16_t units) noexcept
+							   std::uint16_t units, std::uint16_t unit_value = bonus_unit_value) noexcept
 {
-	state.score.score_delta += static_cast<std::uint32_t>(units) * bonus_unit_value;
+	state.score.score_delta += static_cast<std::uint32_t>(units) * unit_value;
 	state.pointnum_times_2 = false;
 	const auto left = word_sub(center.x, boss_bonus_area / 2);
 	const auto top = word_sub(center.y, boss_bonus_area / 2);
@@ -266,7 +296,7 @@ void boss_hittest_player(State &state) noexcept
 		else if (point_x > playfield_width)
 			point_x = playfield_width;
 		presentation.pointnum({point_x, word_add(top, std::bit_cast<std::int16_t>(*y))},
-							  bonus_unit_value, false);
+							  unit_value, false);
 	}
 	return true;
 }
@@ -278,10 +308,11 @@ void boss_hittest_player(State &state) noexcept
 	state.boss.phase_timed_out = false;
 	return true;
 }
-[[nodiscard]] bool midboss_score_bonus(State &state, Presentation &presentation,
+
+[[nodiscard]] bool midboss_score_bonus_impl(State &state, Presentation &presentation,
 									   std::uint16_t units) noexcept
 {
-	return score_bonus(state, presentation, state.midboss.pos.cur, units);
+	return score_bonus(state, presentation, state.midboss.pos.cur, units, 1280U);
 }
 [[nodiscard]] bool boss_items_drop(State &state, Presentation &presentation) noexcept
 {
@@ -412,7 +443,7 @@ void boss_hittest_player(State &state) noexcept
 		if (midboss.phase_frame < 1500)
 		{
 			state.bullets.zap.start();
-			if (!midboss_score_bonus(state, presentation, 5U))
+			if (!midboss_score_bonus_impl(state, presentation, 5U))
 				return false;
 			items_add(state, presentation, midboss.pos.cur, ItemType::big_power);
 		}
@@ -442,6 +473,7 @@ void boss_hittest_player(State &state) noexcept
 		return true;
 	default:
 		state.midboss_active = false;
+		state.midboss_callback_active = false;
 		midboss.hp = 0;
 		presentation.boss_hp(midboss.hp, midboss1_hp_total);
 		return true;
@@ -916,7 +948,9 @@ void boss_hittest_player(State &state) noexcept
 	}
 	return true;
 }
-[[nodiscard]] bool boss_defeat_update(State &state, Presentation &presentation) noexcept
+[[nodiscard]] bool boss_defeat_update(
+	State &state, Presentation &presentation, std::uint8_t score_bonus = 10U
+) noexcept
 {
 	auto &boss = state.boss;
 	if (boss.phase == phase_explode_small)
@@ -936,7 +970,7 @@ void boss_hittest_player(State &state) noexcept
 			if (boss.phase_state != 0U)
 			{
 				state.bullets.zap.start();
-				if (!boss_score_bonus(state, presentation, 10U))
+				if (!boss_score_bonus(state, presentation, score_bonus))
 					return false;
 			}
 			boss.sprite = pat_enemy_kill;
@@ -1092,7 +1126,7 @@ void midboss2_orbit(State &state) noexcept
 		(void)midboss_hittest(state, presentation);
 		if(midboss.phase_frame < 1000 && midboss.hp > 400) break;
 		if(midboss.phase_frame < 1000) {
-			if(!midboss_score_bonus(state, presentation, 5U)) return false;
+			if(!midboss_score_bonus_impl(state, presentation, 5U)) return false;
 			bullets_clear(state);
 		}
 		++midboss.phase;
@@ -1113,7 +1147,7 @@ void midboss2_orbit(State &state) noexcept
 		if(midboss.phase_frame < 800 && midboss.hp > 0) break;
 		if(midboss.phase_frame < 800) {
 			state.bullets.zap.start();
-			if(!midboss_score_bonus(state, presentation, 15U)) return false;
+			if(!midboss_score_bonus_impl(state, presentation, 15U)) return false;
 			items_add(state, presentation, midboss.pos.cur, ItemType::bomb);
 		}
 		midboss.phase = phase_explode_big;
@@ -1139,6 +1173,7 @@ void midboss2_orbit(State &state) noexcept
 		return true;
 	default:
 		state.midboss_active = false;
+		state.midboss_callback_active = false;
 		midboss.hp = 0;
 		presentation.boss_hp(midboss.hp, midboss2_hp_total);
 		return true;
@@ -1981,7 +2016,7 @@ void midboss3_gather(State &state, Presentation &presentation) noexcept
 		}
 		if(midboss.hp > 0) break;
 		state.bullets.zap.start();
-		if(!midboss_score_bonus(state, presentation, 15U)) return false;
+		if(!midboss_score_bonus_impl(state, presentation, 15U)) return false;
 		items_add(state, presentation, midboss.pos.cur, ItemType::one_up);
 	defeated:
 		midboss.phase = phase_explode_big;
@@ -2006,6 +2041,7 @@ void midboss3_gather(State &state, Presentation &presentation) noexcept
 		return true;
 	default:
 		state.midboss_active = false;
+		state.midboss_callback_active = false;
 		midboss.hp = 0;
 		presentation.boss_hp(midboss.hp, midboss3_hp_total);
 		return true;
@@ -2763,6 +2799,13 @@ void alice_pattern_finish(State &state) noexcept
 }
 } // namespace
 
+bool midboss_score_bonus(
+	State &state, Presentation &presentation, std::uint16_t units
+) noexcept
+{
+	return midboss_score_bonus_impl(state, presentation, units);
+}
+
 // Stage 4 keeps its second character in State::stage4 rather than borrowing
 // the single-boss helpers' storage.  The source pair hittest returns an
 // outcome (which character exhausted its phase), never a fallible-operation
@@ -2900,7 +2943,7 @@ void alice_pattern_finish(State &state) noexcept
 		}
 		if(midboss.phase == 1U && midboss.hp <= 0) {
 			state.bullets.zap.start();
-			if(!midboss_score_bonus(state, presentation, 15U)) return false;
+			if(!th05::core::midboss_score_bonus(state, presentation, 15U)) return false;
 			items_add(state, presentation, midboss.pos.cur, ItemType::bomb);
 			midboss.phase = phase_explode_big;
 			midboss.sprite = pat_enemy_kill;
@@ -2912,9 +2955,19 @@ void alice_pattern_finish(State &state) noexcept
 			presentation.sound(12U);
 		}
 	} else if(midboss.phase == phase_explode_big) {
-		if(midboss.phase_frame == 1) state.midboss_active=false;
-		if((midboss.phase_frame & 15) == 0) ++midboss.sprite;
-	} else state.midboss_active=false;
+		if(midboss.phase_frame == 1) {
+			state.playfield_shake_anim_time=10;
+			state.midboss_active=false;
+		}
+		if((midboss.phase_frame & 15) == 0) {
+			++midboss.sprite;
+			if(midboss.sprite >= pat_enemy_kill_last + 1U) midboss.phase = phase_none;
+		}
+	} else {
+		state.midboss_active=false;
+		state.midboss_callback_active=false;
+		midboss.hp=0;
+	}
 	presentation.boss_hp(midboss.hp, 1100);
 	state.shots.homing_target=midboss.pos.cur;
 	return true;
@@ -4846,13 +4899,886 @@ void stage4_explode_big_at(State &state, Presentation &presentation, BossPoint c
 	return true;
 }
 
+[[nodiscard]] static std::uint8_t stage5_rank_select(
+	const State &state, std::uint8_t easy, std::uint8_t normal,
+	std::uint8_t hard, std::uint8_t lunatic
+) noexcept
+{
+	switch(state.rank) {
+	case 0U: return easy;
+	case 1U:
+	case 4U: return normal;
+	case 2U: return hard;
+	case 3U: return lunatic;
+	default: return easy;
+	}
+}
+
+[[nodiscard]] static bool stage5_midboss_pattern_blue_spreads(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &midboss = state.midboss;
+	if((midboss.phase_frame % 4) == 0) {
+		auto &bullet = state.bullets.bullet_template;
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.patnum = pat_bullet16_vector_blue;
+		bullet.speed = 88U;
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::spread);
+		bullet.spread = 13U;
+		bullet.spread_angle_delta = 7U;
+		if(!bullets_add_regular(state)) return false;
+		presentation.sound(3U);
+	}
+	return true;
+}
+
+[[nodiscard]] static bool stage5_midboss_pattern_random_green_rings(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &midboss = state.midboss;
+	if((midboss.phase_frame % 4) == 0) {
+		const auto x = pc98::th0405::randring_next16_mod(state.random, 1024U);
+		const auto y = pc98::th0405::randring_next16_mod(state.random, 1024U);
+		const auto angle = pc98::th0405::randring_next16(state.random);
+		if(!x || !y || !angle) return false;
+		auto &bullet = state.bullets.bullet_template;
+		bullet.spawn_type = bullet_spawn_type_no_decelerate;
+		bullet.patnum = pat_bullet16_directional_green;
+		bullet.speed = 32U;
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::ring);
+		bullet.spread = 16U;
+		bullet.origin.x = word_add(midboss.pos.cur.x, word_sub(std::bit_cast<std::int16_t>(*x), 512));
+		bullet.origin.y = word_add(midboss.pos.cur.y, word_sub(std::bit_cast<std::int16_t>(*y), 512));
+		bullet.angle = static_cast<std::uint8_t>(*angle);
+		if(!bullets_add_regular(state)) return false;
+		presentation.sound(3U);
+	}
+	return true;
+}
+
+[[nodiscard]] static bool stage5_midboss_pattern_aimed_pellet_stacks(
+	State &state, Presentation &presentation
+) noexcept
+{
+	if(state.midboss.phase_frame != 32) return true;
+	auto &bullet = state.bullets.bullet_template;
+	bullet.spawn_type = static_cast<std::uint8_t>(
+		bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+	);
+	bullet.patnum = 0U;
+	bullet.group = static_cast<std::uint8_t>(BulletGroup::spread_stack_aimed);
+	bullet.angle = 0U;
+	bullet.spread = 5U;
+	bullet.spread_angle_delta = 10U;
+	bullet.stack = 5U;
+	bullet.stack_speed_delta = 6U;
+	bullet.speed = 32U;
+	if(!bullets_add_regular(state)) return false;
+	bullet.group = static_cast<std::uint8_t>(BulletGroup::ring_stack_aimed);
+	bullet.stack_speed_delta = 4U;
+	bullet.spread = 32U;
+	if(!bullets_add_regular(state)) return false;
+	presentation.sound(15U);
+	return true;
+}
+
+// The pattern callback's completion predicate is distinct from a refused
+// concrete operation.  m5_updt.cpp returns to flight only after its frame
+// predicate; a failed RNG or bullet-pool operation must propagate instead.
+enum class Stage5MidbossPatternResult : std::uint8_t {
+	running,
+	completed,
+	unsupported,
+};
+
+[[nodiscard]] static Stage5MidbossPatternResult stage5_midboss_pattern_update(
+	State &state, Presentation &presentation
+) noexcept
+{
+	switch(state.stage5.midboss_pattern) {
+	case Stage5MidbossPattern::blue_spreads:
+		if(!stage5_midboss_pattern_blue_spreads(state, presentation)) {
+			return Stage5MidbossPatternResult::unsupported;
+		}
+		return (state.midboss.phase_frame < 96) ?
+			Stage5MidbossPatternResult::running : Stage5MidbossPatternResult::completed;
+	case Stage5MidbossPattern::random_green_rings:
+		if(!stage5_midboss_pattern_random_green_rings(state, presentation)) {
+			return Stage5MidbossPatternResult::unsupported;
+		}
+		return (state.midboss.phase_frame < 96) ?
+			Stage5MidbossPatternResult::running : Stage5MidbossPatternResult::completed;
+	case Stage5MidbossPattern::aimed_pellet_stacks:
+		if(!stage5_midboss_pattern_aimed_pellet_stacks(state, presentation)) {
+			return Stage5MidbossPatternResult::unsupported;
+		}
+		return (state.midboss.phase_frame < 64) ?
+			Stage5MidbossPatternResult::running : Stage5MidbossPatternResult::completed;
+	}
+	return Stage5MidbossPatternResult::unsupported;
+}
+
+[[nodiscard]] static bool stage5_midboss_update(State &state, Presentation &presentation)
+{
+	auto &midboss = state.midboss;
+	++midboss.phase_frame;
+	state.bullets.bullet_template.origin = midboss.pos.cur;
+	state.bullets.gather_template.center = midboss.pos.cur;
+	if(midboss.phase == 0U) {
+		(void)pc98::th0405::update_motion(midboss.pos);
+		std::uint16_t damage{};
+		(void)midboss_hittest_damage(state, presentation, {384, 384}, 10U, damage);
+		if(midboss.phase_frame >= 192) {
+			midboss.phase = 1U;
+			midboss.phase_frame = 0;
+			midboss.angle = 0U;
+			state.boss.statebytes[13U] = 0U;
+			state.boss.statebytes[14U] = 1U;
+			state.boss.statebytes[15U] = 0U;
+			state.stage5.midboss_pattern = Stage5MidbossPattern::blue_spreads;
+			midboss.pos.velocity.y = 0;
+		}
+	} else if(midboss.phase == 1U) {
+		midboss.pos.prev = midboss.pos.cur;
+		if(state.boss.statebytes[14U] == 0U) {
+			if(midboss.phase_frame == 1) {
+				midboss.pos.velocity.x = (state.boss.statebytes[15U] == 0U ||
+					state.boss.statebytes[15U] == 3U) ? -32 : 32;
+				state.boss.statebytes[15U] = static_cast<std::uint8_t>(
+					(state.boss.statebytes[15U] + 1U) & 3U
+				);
+			}
+			(void)pc98::th0405::update_motion(midboss.pos);
+			if(midboss.phase_frame >= 32) {
+				midboss.phase_frame = 0;
+				++state.boss.statebytes[13U];
+				switch(state.boss.statebytes[13U] % 3U) {
+				case 0U: state.stage5.midboss_pattern = Stage5MidbossPattern::blue_spreads; break;
+				case 1U: state.stage5.midboss_pattern = Stage5MidbossPattern::random_green_rings; break;
+				default: state.stage5.midboss_pattern = Stage5MidbossPattern::aimed_pellet_stacks; break;
+				}
+				state.boss.statebytes[14U] = 1U;
+				if(state.boss.statebytes[13U] >= 16U) goto defeated;
+			}
+		} else {
+			if(midboss.phase_frame < 32) {
+				gather_add_only_3stack(state, static_cast<std::int16_t>(midboss.phase_frame - 16), 3U, 2U);
+				if(midboss.phase_frame == 16) presentation.sound(8U);
+				if(midboss.phase_frame == 20 || midboss.phase_frame == 24 || midboss.phase_frame == 28) {
+					++midboss.sprite;
+				}
+				const auto angle = pc98::masterlib::iatan2_source(
+					word_sub(state.player_pos.cur.y, midboss.pos.cur.y),
+					word_sub(state.player_pos.cur.x, midboss.pos.cur.x)
+				);
+				if(!angle) return false;
+				state.bullets.bullet_template.angle = *angle;
+			} else {
+				if(midboss.sprite < pat_midboss5_last && (midboss.phase_frame % 4) == 0) {
+					++midboss.sprite;
+				}
+				const auto pattern_result = stage5_midboss_pattern_update(state, presentation);
+				if(pattern_result == Stage5MidbossPatternResult::unsupported) return false;
+				if(pattern_result == Stage5MidbossPatternResult::completed) {
+					midboss.phase_frame = 0;
+					state.boss.statebytes[14U] = 0U;
+					midboss.sprite = pat_midboss5_first;
+				}
+			}
+		}
+		if(midboss.phase == 1U && !midboss_hittest(state, presentation)) {
+			// A false predicate means the normal, still-alive source hittest path.
+			if(midboss.hp > 0) goto midboss_done;
+		}
+		if(midboss.hp > 0) goto midboss_done;
+		state.bullets.zap.start();
+		if(!midboss_score_bonus_impl(state, presentation, 30U)) return false;
+		items_add(state, presentation, midboss.pos.cur, ItemType::one_up);
+	defeated:
+		midboss.phase = phase_explode_big;
+		midboss.sprite = pat_enemy_kill;
+		midboss.phase_frame = 0;
+		if(!pc98::th0405::sparks_add_circle(
+			pc98::th0405::SparkPool{state.sparks, state.spark_ring_offset}, midboss.pos.cur, 128, 48U
+		)) return false;
+		presentation.sound(12U);
+	}
+midboss_done:
+	if(midboss.phase == phase_explode_big) {
+		if(midboss.phase_frame == 1) {
+			state.playfield_shake_anim_time = 10;
+			state.midboss_active = false;
+		}
+		if((midboss.phase_frame % 16) == 0) {
+			++midboss.sprite;
+			if(midboss.sprite >= pat_enemy_kill_last + 1U) midboss.phase = phase_none;
+		}
+	} else if(midboss.phase != 0U && midboss.phase != 1U) {
+		state.midboss_active = false;
+		state.midboss_callback_active = false;
+		midboss.hp = 0;
+	}
+	presentation.boss_hp(midboss.hp, 1550);
+	state.shots.homing_target = midboss.pos.cur;
+	return true;
+}
+
+void stage5_vector_at(
+	BossPoint &destination, BossPoint center, std::int16_t distance, std::uint8_t angle
+) noexcept
+{
+	const auto offset = pc98::masterlib::vector2(angle, distance);
+	destination = {word_add(center.x, offset.x), word_add(center.y, offset.y)};
+}
+
+// b5.cpp's flystep result is a completion predicate.  Keep it distinct from
+// a failed random-angle read, because both occur on the same first-frame path.
+enum class Stage5FlystepResult : std::uint8_t {
+	running,
+	completed,
+	unsupported,
+};
+
+[[nodiscard]] static Stage5FlystepResult stage5_yumeko_flystep_bounce(State &state) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.phase_frame == 1) {
+		const auto angle = pc98::th0405::randring_next16(state.random);
+		if(!angle) return Stage5FlystepResult::unsupported;
+		const auto velocity = pc98::masterlib::vector2(static_cast<std::uint8_t>(*angle), 32);
+		boss.pos.velocity = {velocity.x, velocity.y};
+		boss.sprite = pat_yumeko_fly;
+	}
+	boss.pos.cur.x = word_add(boss.pos.cur.x, boss.pos.velocity.x);
+	boss.pos.cur.y = word_add(boss.pos.cur.y, boss.pos.velocity.y);
+	if(boss.pos.cur.x <= 768 || boss.pos.cur.x >= 5376) {
+		boss.pos.velocity.x = word(-static_cast<std::int32_t>(boss.pos.velocity.x));
+	}
+	if(boss.pos.cur.y <= 768 || boss.pos.cur.y >= 2048) {
+		boss.pos.velocity.y = word(-static_cast<std::int32_t>(boss.pos.velocity.y));
+	}
+	if(boss.phase_frame < 64) return Stage5FlystepResult::running;
+	boss.sprite = pat_yumeko_still;
+	return Stage5FlystepResult::completed;
+}
+
+[[nodiscard]] static bool stage5_yumeko_phase2_sword_fan(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &sword = state.swords.sword_template;
+	if(boss.phase_frame == 16) {
+		boss.sprite = pat_yumeko_cast;
+		sword.twirl_time = 48U;
+		sword.speed = 80U;
+		sword.angle = 0x70U;
+		const auto mirror = pc98::th0405::randring_next16_and(state.random, 1U);
+		if(!mirror) return false;
+		boss.statebytes[15U] = static_cast<std::uint8_t>(*mirror);
+	} else if(boss.phase_frame > 32 && (boss.phase_frame % 2) == 0) {
+		if(boss.statebytes[15U] != 0U) sword.angle = byte_add(0x80U, -sword.angle);
+		stage5_vector_at(sword.origin, boss.pos.cur, 768, sword.angle);
+		swords_add(state);
+		if(boss.statebytes[15U] != 0U) sword.angle = byte_add(0x80U, -sword.angle);
+		sword.angle = byte_add(sword.angle, -6);
+		if(sword.angle <= 0x0CU) {
+			boss.phase_frame = 0;
+			boss.mode = 0U;
+		}
+	}
+	(void)presentation;
+	return true;
+}
+
+[[nodiscard]] static bool stage5_yumeko_phase2_red_ball_ring(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	if(boss.phase_frame < 32) {
+		gather_add_only_3stack(state, static_cast<std::int16_t>(boss.phase_frame - 16), 7U, 6U);
+		if(boss.phase_frame == 16) {
+			boss.sprite = pat_yumeko_cast;
+			bullet.spawn_type = static_cast<std::uint8_t>(
+				bullet_spawn_type_cloud_backwards | bullet_spawn_type_no_decelerate
+			);
+			bullet.patnum = pat_bullet16_ball_red;
+			bullet.group = static_cast<std::uint8_t>(BulletGroup::ring);
+			bullet.speed = 60U;
+			bullet.spread = 16U;
+			if(!bullet_template_tune(state)) return false;
+			presentation.sound(8U);
+		}
+	} else {
+		if((boss.phase_frame % 4) == 0) {
+			const auto angle = pc98::th0405::randring_next16(state.random);
+			const auto distance = pc98::th0405::randring_next16_mod(state.random, 512U);
+			if(!angle || !distance) return false;
+			bullet.angle = static_cast<std::uint8_t>(*angle);
+			stage5_vector_at(
+				bullet.origin, boss.pos.cur, std::bit_cast<std::int16_t>(*distance), bullet.angle
+			);
+			if(!bullets_add_regular(state)) return false;
+			presentation.sound(3U);
+		}
+		if(boss.phase_frame == 80) {
+			boss.phase_frame = 0;
+			boss.mode = 0U;
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] static bool stage5_yumeko_phase4_arrowheads_and_sword(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	auto &sword = state.swords.sword_template;
+	if(boss.phase_frame < 32) {
+		gather_add_only_3stack(state, static_cast<std::int16_t>(boss.phase_frame - 16), 7U, 6U);
+		if(boss.phase_frame == 16) {
+			boss.sprite = pat_yumeko_cast;
+			bullet.spawn_type = static_cast<std::uint8_t>(
+				bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+			);
+			bullet.patnum = pat_bullet16_vector_red;
+			bullet.group = static_cast<std::uint8_t>(BulletGroup::single);
+			bullet.speed = 96U;
+			if(!bullet_template_tune(state)) return false;
+			presentation.sound(8U);
+			sword.twirl_time = 32U;
+			sword.speed = 76U;
+			boss.statebytes[13U] = 0U;
+			boss.statebytes[12U] = 0x20U;
+		}
+	} else {
+		const auto tick = static_cast<std::uint8_t>(boss.phase_frame % 64);
+		if(boss.statebytes[12U] > tick && (tick & 1U) == 0U) {
+			bullet.origin.x = word_add(bullet.origin.x, -512);
+			bullet.origin.y = word_add(bullet.origin.y, -256);
+			if(tick == 0U) {
+				const auto left = pc98::masterlib::iatan2_source(
+					word_sub(state.player_pos.cur.y, bullet.origin.y),
+					word_sub(state.player_pos.cur.x, bullet.origin.x)
+				);
+				const auto right = pc98::masterlib::iatan2_source(
+					word_sub(state.player_pos.cur.y, bullet.origin.y),
+					word_sub(state.player_pos.cur.x, word_add(bullet.origin.x, 1024))
+				);
+				if(!left || !right) return false;
+				boss.statebytes[15U] = *left;
+				boss.statebytes[14U] = *right;
+			}
+			bullet.angle = boss.statebytes[15U];
+			if(!bullets_add_regular(state)) return false;
+			bullet.origin.x = word_add(bullet.origin.x, 1024);
+			bullet.angle = boss.statebytes[14U];
+			if(!bullets_add_regular(state)) return false;
+			presentation.sound(3U);
+		}
+		if((boss.phase_frame % state.stage5.interval_phase4) == 0) {
+			const auto offset = pc98::th0405::randring_next16_and(state.random, 0x1FU);
+			const auto y = pc98::th0405::randring_next16_mod(state.random, 1536U);
+			const auto x = pc98::th0405::randring_next16_mod(state.random, 5632U);
+			if(!offset || !y || !x) return false;
+			sword.origin.y = std::bit_cast<std::int16_t>(*y);
+			sword.origin.x = word_add(std::bit_cast<std::int16_t>(*x), 256);
+			const auto angle = pc98::masterlib::iatan2_source(
+				word_sub(state.player_pos.cur.y, sword.origin.y),
+				word_sub(state.player_pos.cur.x, sword.origin.x)
+			);
+			if(!angle) return false;
+			sword.angle = byte_add(*angle, static_cast<std::int16_t>(*offset) - 15);
+			swords_add(state);
+		}
+		if(word_sub(boss.hp, boss.phase_end_hp) < 600 && boss.statebytes[13U] == 0U) {
+			boss.statebytes[13U] = 1U;
+			state.stage5.interval_phase4 = stage5_rank_select(state, 16U, 8U, 4U, 4U);
+			boss.statebytes[12U] = stage5_rank_select(state, 40U, 48U, 52U, 52U);
+			boss_explode_small(state, presentation, 0U);
+			bullets_clear(state);
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] static bool stage5_yumeko_phase5_exact_linear_pairs(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	if(boss.phase_frame < 16) {
+		gather_add_only_3stack(state, static_cast<std::int16_t>(boss.phase_frame - 1), 7U, 6U);
+		if(boss.phase_frame == 4) {
+			boss.sprite = pat_yumeko_cast;
+			bullet.spawn_type = bullet_spawn_type_no_decelerate;
+			bullet.group = static_cast<std::uint8_t>(BulletGroup::spread);
+			bullet.special_motion = static_cast<std::uint8_t>(BulletSpecialMotion::exact_linear);
+			bullet.speed = 56U;
+			bullet.spread = 5U;
+			bullet.spread_angle_delta = 2U;
+			presentation.sound(8U);
+			boss.statebytes[15U] = 0x60U;
+			boss.statebytes[14U] = 0x40U;
+		}
+	} else {
+		if((boss.phase_frame % 8) == 0) {
+			bullet.patnum = pat_bullet16_ball_blue;
+			stage5_vector_at(bullet.origin, boss.pos.cur, 768, boss.statebytes[15U]);
+			bullet.angle = byte_add(boss.statebytes[15U], boss.statebytes[14U]);
+			if(!bullets_add_special(state)) return false;
+			stage5_vector_at(bullet.origin, boss.pos.cur, 768, byte_add(boss.statebytes[15U], 0x80));
+			bullet.angle = byte_add(bullet.angle, 0x80);
+			if(!bullets_add_special(state)) return false;
+
+			bullet.patnum = 0U;
+			boss.statebytes[15U] = static_cast<std::uint8_t>(
+				-static_cast<std::int8_t>(boss.statebytes[15U])
+			);
+			stage5_vector_at(bullet.origin, boss.pos.cur, 512, boss.statebytes[15U]);
+			bullet.angle = byte_add(boss.statebytes[15U], -static_cast<std::int8_t>(boss.statebytes[14U]));
+			if(!bullets_add_special(state)) return false;
+			stage5_vector_at(bullet.origin, boss.pos.cur, 512, byte_add(boss.statebytes[15U], 0x80));
+			bullet.angle = byte_add(bullet.angle, 0x80);
+			if(!bullets_add_special(state)) return false;
+
+			boss.statebytes[15U] = static_cast<std::uint8_t>(
+				-static_cast<std::int8_t>(boss.statebytes[15U])
+			);
+			boss.statebytes[15U] = byte_add(boss.statebytes[15U], -8);
+			boss.statebytes[14U] = byte_add(boss.statebytes[14U], -6);
+			presentation.sound(3U);
+		}
+		if(boss.phase_frame == 256) {
+			boss.phase_frame = 0;
+			boss.mode = 0U;
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] static bool stage5_yumeko_phase5_green_arrowheads(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	if(boss.phase_frame < 16) {
+		gather_add_only_3stack(state, static_cast<std::int16_t>(boss.phase_frame - 1), 7U, 6U);
+		if(boss.phase_frame == 4) {
+			boss.sprite = pat_yumeko_cast;
+			bullet.spawn_type = bullet_spawn_type_no_decelerate;
+			bullet.group = static_cast<std::uint8_t>(BulletGroup::spread_aimed);
+			bullet.speed = 56U;
+			bullet.spread_angle_delta = 20U;
+			bullet.angle = 0U;
+			bullet.patnum = pat_bullet16_directional_green;
+			if(!bullet_template_tune(state)) return false;
+			presentation.sound(8U);
+			boss.statebytes[15U] = 0x80U;
+		}
+	} else {
+		if((boss.phase_frame % 8) == 0) {
+			stage5_vector_at(bullet.origin, boss.pos.cur, 768, boss.statebytes[15U]);
+			bullet.spread = 5U;
+			if(!bullets_add_regular(state)) return false;
+			stage5_vector_at(bullet.origin, boss.pos.cur, 768, byte_add(0x80U, -boss.statebytes[15U]));
+			bullet.spread = 4U;
+			if(!bullets_add_regular(state)) return false;
+			boss.statebytes[15U] = byte_add(boss.statebytes[15U], 8);
+			presentation.sound(3U);
+		}
+		if(boss.phase_frame == 192) {
+			boss.phase_frame = 0;
+			boss.mode = 0U;
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] static bool stage5_yumeko_phase7_arrowheads_laser_swords(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	auto &laser = state.lasers.laser_template;
+	auto &sword = state.swords.sword_template;
+	if(boss.phase_frame < 32) {
+		gather_add_only_3stack(state, static_cast<std::int16_t>(boss.phase_frame - 16), 7U, 6U);
+		if(boss.phase_frame == 16) {
+			boss.sprite = pat_yumeko_cast;
+			bullet.spawn_type = static_cast<std::uint8_t>(
+				bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+			);
+			bullet.patnum = pat_bullet16_vector_blue;
+			bullet.group = static_cast<std::uint8_t>(BulletGroup::single);
+			bullet.speed = 96U;
+			if(!bullet_template_tune(state)) return false;
+			presentation.sound(8U);
+			laser.age = 24;
+			laser.shootout_speed = 100;
+			laser.coords.width = 6U;
+			laser.color = 8U;
+			laser.active_at_age = 28;
+			boss.statebytes[13U] = 0U;
+			boss.statebytes[12U] = 0x20U;
+			sword.twirl_time = 32U;
+			sword.speed = 76U;
+		}
+	} else {
+		const auto tick = static_cast<std::uint8_t>(boss.phase_frame % 64);
+		if(boss.statebytes[12U] > tick && (tick & 1U) == 0U) {
+			bullet.origin.x = word_add(bullet.origin.x, -512);
+			bullet.origin.y = word_add(bullet.origin.y, -256);
+			if(tick == 0U) {
+				const auto left = pc98::masterlib::iatan2_source(
+					word_sub(state.player_pos.cur.y, bullet.origin.y),
+					word_sub(state.player_pos.cur.x, bullet.origin.x)
+				);
+				const auto right = pc98::masterlib::iatan2_source(
+					word_sub(state.player_pos.cur.y, bullet.origin.y),
+					word_sub(state.player_pos.cur.x, word_add(bullet.origin.x, 1024))
+				);
+				if(!left || !right) return false;
+				boss.statebytes[15U] = *left;
+				boss.statebytes[14U] = *right;
+			}
+			bullet.angle = boss.statebytes[15U];
+			if(!bullets_add_regular(state)) return false;
+			bullet.origin.x = word_add(bullet.origin.x, 1024);
+			bullet.angle = boss.statebytes[14U];
+			if(!bullets_add_regular(state)) return false;
+			presentation.sound(3U);
+		}
+		if((boss.phase_frame % state.stage5.interval_phase7) == 0) {
+			const auto laser_x = pc98::th0405::randring_next16_mod(state.random, 4096U);
+			if(!laser_x) return false;
+			laser.coords.origin.y = 512;
+			laser.coords.origin.x = word_add(std::bit_cast<std::int16_t>(*laser_x), 1024);
+			const auto laser_angle = pc98::masterlib::iatan2_source(
+				word_sub(state.player_pos.cur.y, laser.coords.origin.y),
+				word_sub(state.player_pos.cur.x, laser.coords.origin.x)
+			);
+			if(!laser_angle) return false;
+			laser.coords.angle = *laser_angle;
+			if(!lasers_shootout_add(state, presentation)) return false;
+			for(std::uint8_t i{}; i < 2U; ++i) {
+				const auto offset = pc98::th0405::randring_next16_and(state.random, 0x1FU);
+				const auto y = pc98::th0405::randring_next16_mod(state.random, 1536U);
+				const auto x = pc98::th0405::randring_next16_mod(state.random, 5632U);
+				if(!offset || !y || !x) return false;
+				sword.origin.y = std::bit_cast<std::int16_t>(*y);
+				sword.origin.x = word_add(std::bit_cast<std::int16_t>(*x), 256);
+				const auto sword_angle = pc98::masterlib::iatan2_source(
+					word_sub(state.player_pos.cur.y, sword.origin.y),
+					word_sub(state.player_pos.cur.x, sword.origin.x)
+				);
+				if(!sword_angle) return false;
+				sword.angle = byte_add(*sword_angle, static_cast<std::int16_t>(*offset) - 15);
+				swords_add(state);
+			}
+		}
+		if(word_sub(boss.hp, boss.phase_end_hp) < 500 && boss.statebytes[13U] == 0U) {
+			boss.statebytes[13U] = 1U;
+			state.stage5.interval_phase7 = stage5_rank_select(state, 34U, 28U, 20U, 20U);
+			boss.statebytes[12U] = stage5_rank_select(state, 40U, 48U, 52U, 48U);
+			boss_explode_small(state, presentation, 0U);
+			bullets_clear(state);
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] static bool stage5_yumeko_phase8_swords_and_spreads(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &secondary = state.stage4.yuki;
+	auto &bullet = state.bullets.bullet_template;
+	auto &sword = state.swords.sword_template;
+	if(boss.phase_frame < 32) {
+		gather_add_only_3stack(state, static_cast<std::int16_t>(boss.phase_frame - 16), 7U, 6U);
+		if(boss.phase_frame != 16) return true;
+		boss.sprite = pat_yumeko_cast;
+		bullet.spawn_type = bullet_spawn_type_no_decelerate;
+		bullet.patnum = pat_bullet16_directional_blue;
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::spread);
+		bullet.spread = 5U;
+		bullet.spread_angle_delta = stage5_rank_select(state, 24U, 16U, 12U, 10U);
+		bullet.speed = 128U;
+		presentation.sound(8U);
+		sword.twirl_time = 32U;
+		sword.speed = 64U;
+		const auto y = pc98::th0405::randring_next16_mod(state.random, 512U);
+		if(!y) return false;
+		secondary.pos.cur.y = std::bit_cast<std::int16_t>(*y);
+		boss.statebytes[15U] = stage5_rank_select(state, 0x28U, 0x1EU, 0x18U, 0x10U);
+		boss.statebytes[14U] = 0U;
+		boss.statebytes[13U] = 0U;
+		return true;
+	}
+	if(boss.statebytes[13U] == 0U) {
+		if((boss.phase_frame % 8) != 0) return true;
+		sword.angle = boss.statebytes[14U];
+		sword.origin.x = sword.angle == 0U ? 256 : 5888;
+		sword.origin.y = secondary.pos.cur.y;
+		swords_add(state);
+		secondary.pos.cur.y = word_add(
+			secondary.pos.cur.y, static_cast<std::int16_t>(boss.statebytes[15U] << 4U)
+		);
+		boss.statebytes[14U] = byte_add(boss.statebytes[14U], 0x80);
+		if(secondary.pos.cur.y >= 6016) {
+			const auto y = pc98::th0405::randring_next16_mod(state.random, 512U);
+			if(!y) return false;
+			secondary.pos.cur.y = std::bit_cast<std::int16_t>(*y);
+			++boss.statebytes[13U];
+		}
+		return true;
+	}
+	if((boss.phase_frame % 4) != 0) return true;
+	if(bullet.speed > 96U) {
+		bullet.speed = 8U;
+		presentation.sound(15U);
+		++boss.statebytes[13U];
+		if(boss.statebytes[13U] > 5U) {
+			boss.statebytes[13U] = 0U;
+			return true;
+		}
+		const auto angle = pc98::masterlib::iatan2_source(
+			word_sub(state.player_pos.cur.y, bullet.origin.y),
+			word_sub(state.player_pos.cur.x, bullet.origin.x)
+		);
+		if(!angle) return false;
+		bullet.angle = *angle;
+	}
+	bullet.speed = byte_add(bullet.speed, 8);
+	return bullets_add_regular(state);
+}
+
+[[nodiscard]] static bool stage5_yumeko_phase10_turning_rings(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	if(boss.phase_frame < 32) {
+		gather_add_only_3stack(state, static_cast<std::int16_t>(boss.phase_frame - 16), 7U, 6U);
+		if(boss.phase_frame == 16) {
+			boss.sprite = pat_yumeko_cast;
+			bullet.spawn_type = bullet_spawn_type_no_decelerate;
+			bullet.patnum = pat_bullet16_vector_blue;
+			bullet.group = static_cast<std::uint8_t>(BulletGroup::ring);
+			bullet.spread = 18U;
+			bullet.special_motion = static_cast<std::uint8_t>(BulletSpecialMotion::decelerate_then_turn);
+			bullet.speed = 38U;
+			if(!bullet_template_tune(state)) return false;
+			presentation.sound(8U);
+			boss.statebytes[15U] = 0U;
+			state.bullets.special_turns_max = 2U;
+			boss.statebytes[14U] = 0U;
+		}
+	} else if((boss.phase_frame % 16) == 0) {
+		bullet.angle = boss.statebytes[14U];
+		if((boss.statebytes[15U] & 1U) != 0U) {
+			state.bullets.bullet_template_special_angle = 0x40U;
+			bullet.angle = byte_add(0x80U, -bullet.angle);
+		} else {
+			state.bullets.bullet_template_special_angle = 0xC0U;
+		}
+		if(!bullets_add_special_fixedspeed(state)) return false;
+		++boss.statebytes[14U];
+		++boss.statebytes[15U];
+		presentation.sound(3U);
+	}
+	return true;
+}
+
+[[nodiscard]] static bool stage5_yumeko_pattern_update(
+	State &state, Presentation &presentation
+) noexcept
+{
+	switch(state.stage5.yumeko_pattern) {
+	case Stage5YumekoPattern::phase2_sword_fan:
+		return stage5_yumeko_phase2_sword_fan(state, presentation);
+	case Stage5YumekoPattern::phase2_red_ball_ring:
+		return stage5_yumeko_phase2_red_ball_ring(state, presentation);
+	case Stage5YumekoPattern::phase4_arrowheads_and_sword:
+		return stage5_yumeko_phase4_arrowheads_and_sword(state, presentation);
+	case Stage5YumekoPattern::phase5_exact_linear_pairs:
+		return stage5_yumeko_phase5_exact_linear_pairs(state, presentation);
+	case Stage5YumekoPattern::phase5_green_arrowheads:
+		return stage5_yumeko_phase5_green_arrowheads(state, presentation);
+	case Stage5YumekoPattern::phase7_arrowheads_laser_swords:
+		return stage5_yumeko_phase7_arrowheads_laser_swords(state, presentation);
+	case Stage5YumekoPattern::phase8_swords_and_spreads:
+		return stage5_yumeko_phase8_swords_and_spreads(state, presentation);
+	case Stage5YumekoPattern::phase10_turning_rings:
+		return stage5_yumeko_phase10_turning_rings(state, presentation);
+	}
+	return false;
+}
+
+[[nodiscard]] static bool stage5_yumeko_update(State &state, Presentation &presentation)
+{
+	auto &boss = state.boss;
+	auto &secondary = state.stage4.yuki;
+	++boss.phase_frame;
+	state.shots.homing_target = boss.pos.cur;
+	state.bullets.bullet_template.origin = boss.pos.cur;
+	state.bullets.gather_template.center = boss.pos.cur;
+	state.swords.sword_template.origin = boss.pos.cur;
+
+	switch(boss.phase) {
+	case 0U:
+		if(boss.phase_frame == 1) {
+			boss.hp = 8300;
+			boss.phase_end_hp = 7500;
+			state.bullets.gather_template = {boss.pos.cur, {}, 1024, 8, 9, 2};
+			boss.sprite = pat_yumeko_still;
+			boss.pos.velocity.x = 64;
+			boss.sprite_left = pat_yumeko_still;
+			boss.sprite_right = pat_yumeko_still;
+			boss.sprite_stay = pat_yumeko_still;
+		}
+		if(secondary.pos.cur.y >= -512) {
+			secondary.pos.cur.y = word_add(secondary.pos.cur.y, -16);
+			std::uint16_t damage{};
+			if(shots_hit(state, secondary.pos.cur, {384, 384}, false, damage) && damage != 0U) {
+				presentation.sound(10U);
+			}
+		}
+		if(boss.phase_frame < 64) {
+			(void)boss_hittest_invincible(state, presentation);
+		} else {
+			boss.sprite = pat_yumeko_fly;
+			boss.pos.cur.x = word_add(boss.pos.cur.x, 32);
+			if(boss.pos.cur.x >= 3072) {
+				boss.sprite = pat_yumeko_still;
+				++boss.phase;
+				boss.phase_frame = 0;
+				presentation.sound(13U);
+			}
+		}
+		break;
+	case 1U:
+		(void)boss_hittest_invincible(state, presentation);
+		if(boss.phase_frame >= 64) {
+			++boss.phase;
+			boss.phase_frame = 0;
+			boss.mode = 1U;
+			boss.phase_state = 0U;
+			state.stage5.yumeko_pattern = Stage5YumekoPattern::phase2_sword_fan;
+		}
+		break;
+	case 2U:
+	case 5U: {
+		const auto phase = boss.phase;
+		if(boss.mode == 0U) {
+			const auto flystep_result = stage5_yumeko_flystep_bounce(state);
+			if(flystep_result == Stage5FlystepResult::unsupported) return false;
+			if(flystep_result == Stage5FlystepResult::completed) {
+				boss.phase_frame = 0;
+				++boss.mode;
+				++boss.phase_state;
+				if(boss.phase_state >= 20U) {
+					if(!boss_phase_next(
+						state, presentation, phase == 2U ? 0U : 3U,
+						phase == 2U ? 5700 : 2700
+					)) return false;
+					break;
+				}
+				if(phase == 2U) {
+					state.stage5.yumeko_pattern = (boss.phase_state & 1U) == 0U ?
+						Stage5YumekoPattern::phase2_sword_fan : Stage5YumekoPattern::phase2_red_ball_ring;
+				} else {
+					state.stage5.yumeko_pattern = (boss.phase_state & 1U) == 0U ?
+						Stage5YumekoPattern::phase5_exact_linear_pairs : Stage5YumekoPattern::phase5_green_arrowheads;
+				}
+			}
+		} else if(!stage5_yumeko_pattern_update(state, presentation)) {
+			return false;
+		}
+		if(boss.phase != phase) break;
+		if(boss.mode != 0U && boss_hittest(state, presentation)) {
+			if(!boss_score_bonus(state, presentation, 10U) ||
+				!boss_phase_next(state, presentation, phase == 2U ? 0U : 3U,
+					phase == 2U ? 5700 : 2700)) return false;
+		}
+		break;
+	}
+	case 3U:
+	case 6U:
+		(void)boss_hittest(state, presentation);
+		if(boss_flystep_towards(state, 3072, 1024)) {
+			++boss.phase;
+			boss.phase_frame = 0;
+			state.stage5.yumeko_pattern = boss.phase == 4U ?
+				Stage5YumekoPattern::phase4_arrowheads_and_sword :
+				Stage5YumekoPattern::phase7_arrowheads_laser_swords;
+		}
+		break;
+	case 4U:
+	case 7U: {
+		const auto phase = boss.phase;
+		if(!stage5_yumeko_pattern_update(state, presentation)) return false;
+		if(boss.phase_frame < 2000) {
+			if(!boss_hittest(state, presentation)) break;
+			if(!boss_score_bonus(state, presentation, 10U)) return false;
+		}
+		if(!boss_phase_next(state, presentation, 1U, phase == 4U ? 4500 : 1200)) return false;
+		if(phase == 4U) state.stage5.yumeko_pattern = Stage5YumekoPattern::phase5_exact_linear_pairs;
+		boss.mode = 1U;
+		break;
+	}
+	case 8U:
+		if(!stage5_yumeko_phase8_swords_and_spreads(state, presentation)) return false;
+		if(boss.phase_frame < 2000) {
+			if(!boss_hittest(state, presentation)) break;
+			if(!boss_score_bonus(state, presentation, 10U)) return false;
+		}
+		if(!boss_phase_next(state, presentation, 1U, 0)) return false;
+		break;
+	case 9U:
+		(void)boss_hittest(state, presentation);
+		if(boss_flystep_towards(state, 3072, 1536)) {
+			++boss.phase;
+			boss.phase_frame = 0;
+			boss.phase_state = 0U;
+		}
+		break;
+	case 10U:
+		if(!stage5_yumeko_phase10_turning_rings(state, presentation)) return false;
+		if(boss.phase_frame < 1200) {
+			if(!boss_hittest(state, presentation)) break;
+			boss.phase_state = 1U;
+		}
+		boss_explode_small(state, presentation, 4U);
+		boss.phase_frame = 0;
+		boss.phase = phase_explode_small;
+		break;
+	default:
+		return boss_defeat_update(state, presentation);
+	}
+
+	swords_update(state, presentation);
+	presentation.boss_hp(boss.hp, 8300);
+	return true;
+}
+
 void stage1_fights_setup(State &state) noexcept
 {
-	state.midboss_active = false;
 	state.boss_active = false;
-	state.midboss.phase = 0U;
-	state.midboss.phase_frame = 0;
-	state.midboss.hp = 0;
 	state.midboss.frames_until = 2500U;
 	state.midboss.pos.cur = {3072, 1536};
 	state.midboss.pos.prev = state.midboss.pos.cur;
@@ -4883,6 +5809,7 @@ void stage1_midboss_activate(State &state) noexcept
 	state.midboss.phase = 0U;
 	state.midboss.phase_frame = 0;
 	state.midboss_active = true;
+	state.midboss_callback_active = true;
 }
 void stage1_boss_activate(State &state) noexcept
 {
@@ -4890,7 +5817,7 @@ void stage1_boss_activate(State &state) noexcept
 }
 bool stage1_fights_update(State &state, Presentation &presentation) noexcept
 {
-	if (state.midboss_active && !midboss1_update(state, presentation))
+	if (state.midboss_callback_active && !midboss1_update(state, presentation))
 		return false;
 	if (state.boss_active && !sara_update(state, presentation))
 		return false;
@@ -4911,11 +5838,7 @@ void stage1_fights_render_tail(State &state, Presentation &presentation) noexcep
 
 void stage2_fights_setup(State &state) noexcept
 {
-	state.midboss_active = false;
 	state.boss_active = false;
-	state.midboss.phase = 0U;
-	state.midboss.phase_frame = 0;
-	state.midboss.damage_this_frame = 0U;
 	state.midboss.frames_until = 2750U;
 	state.midboss.pos.cur = {3072, -512};
 	state.midboss.pos.prev = state.midboss.pos.cur;
@@ -4944,6 +5867,7 @@ void stage2_midboss_activate(State &state) noexcept
 	state.midboss.phase = 0U;
 	state.midboss.phase_frame = 0;
 	state.midboss_active = true;
+	state.midboss_callback_active = true;
 }
 void stage2_boss_activate(State &state) noexcept
 {
@@ -4951,7 +5875,7 @@ void stage2_boss_activate(State &state) noexcept
 }
 bool stage2_fights_update(State &state, Presentation &presentation) noexcept
 {
-	if (state.midboss_active && !midboss2_update(state, presentation))
+	if (state.midboss_callback_active && !midboss2_update(state, presentation))
 		return false;
 	if (state.boss_active && !louise_update(state, presentation))
 		return false;
@@ -4973,11 +5897,7 @@ void stage2_fights_render_tail(State &state, Presentation &presentation) noexcep
 
 void stage3_fights_setup(State &state) noexcept
 {
-	state.midboss_active = false;
 	state.boss_active = false;
-	state.midboss.phase = 0U;
-	state.midboss.phase_frame = 0U;
-	state.midboss.damage_this_frame = 0U;
 	state.midboss.frames_until = 5750U;
 	state.midboss.pos.cur = {3072, -512};
 	state.midboss.pos.prev = state.midboss.pos.cur;
@@ -5008,6 +5928,7 @@ void stage3_midboss_activate(State &state) noexcept
 	state.midboss.phase = 0U;
 	state.midboss.phase_frame = 0U;
 	state.midboss_active = true;
+	state.midboss_callback_active = true;
 }
 
 void stage3_boss_activate(State &state) noexcept
@@ -5017,7 +5938,7 @@ void stage3_boss_activate(State &state) noexcept
 
 bool stage3_fights_update(State &state, Presentation &presentation) noexcept
 {
-	if(state.midboss_active && !midboss3_update(state, presentation)) return false;
+	if(state.midboss_callback_active && !midboss3_update(state, presentation)) return false;
 	if(state.boss_active && !alice_update(state, presentation)) return false;
 	return true;
 }
@@ -5037,11 +5958,7 @@ void stage3_fights_render_tail(State &state, Presentation &presentation) noexcep
 
 void stage4_fights_setup(State &state) noexcept
 {
-	state.midboss_active = false;
 	state.boss_active = false;
-	state.midboss.phase = 0U;
-	state.midboss.phase_frame = 0;
-	state.midboss.damage_this_frame = 0U;
 	state.midboss.frames_until = 3900U;
 	state.midboss.pos.cur = {3072, -512};
 	state.midboss.pos.prev = state.midboss.pos.cur;
@@ -5073,6 +5990,7 @@ void stage4_midboss_activate(State &state) noexcept
 	state.midboss.phase = 0U;
 	state.midboss.phase_frame = 0;
 	state.midboss_active = true;
+	state.midboss_callback_active = true;
 }
 void stage4_boss_activate(State &state) noexcept
 {
@@ -5080,7 +5998,7 @@ void stage4_boss_activate(State &state) noexcept
 }
 bool stage4_fights_update(State &state, Presentation &presentation) noexcept
 {
-	if(state.midboss_active && !stage4_midboss_update(state, presentation)) return false;
+	if(state.midboss_callback_active && !stage4_midboss_update(state, presentation)) return false;
 	if(state.boss_active) {
 		const auto updated = state.stage4.fight == Stage4Fight::pair
 			? stage4_pair_update(state, presentation)
@@ -5100,6 +6018,2062 @@ void stage4_fights_render_tail(State &state, Presentation &presentation) noexcep
 		state.stage4.yuki.damage_this_frame = 0U;
 	}
 	stage4_b4balls_render_tail(state);
+	fights_render_tail_explosions(state);
+	(void)presentation;
+}
+
+void stage5_fights_setup(State &state) noexcept
+{
+	state.boss_active = false;
+	state.midboss.frames_until = 4800U;
+	state.midboss.pos.cur = {3072, -512};
+	state.midboss.pos.prev = state.midboss.pos.cur;
+	state.midboss.pos.velocity = {0, 8};
+	state.midboss.hp = 1550;
+	state.midboss.sprite = pat_midboss5_first;
+
+	state.boss.phase = 0U;
+	state.boss.mode = 0U;
+	state.boss.phase_state = 0U;
+	state.boss.phase_frame = 0;
+	state.boss.damage_this_frame = 0U;
+	state.boss.phase_timed_out = true;
+	state.boss.pos.cur = {1536, 1024};
+	state.boss.pos.prev = state.boss.pos.cur;
+	state.boss.pos.velocity = {};
+	state.boss.sprite = pat_yumeko_still;
+	state.boss.hitbox_radius = {384, 384};
+	state.stage4.yuki.pos.cur = {3072, 1024};
+	state.stage4.yuki.pos.prev = state.stage4.yuki.pos.cur;
+	state.stage4.yuki.pos.velocity = {};
+	state.boss_explosions.small[0].alive = false;
+	state.boss_explosions.small[1].alive = false;
+	state.stage5.interval_phase4 = stage5_rank_select(state, 20U, 10U, 6U, 6U);
+	state.stage5.interval_phase7 = stage5_rank_select(state, 48U, 32U, 24U, 24U);
+}
+
+void stage5_midboss_activate(State &state) noexcept
+{
+	if(state.midboss.frames_until != state.stage_frame) return;
+	state.midboss.phase = 0U;
+	state.midboss.phase_frame = 0;
+	state.midboss_active = true;
+	state.midboss_callback_active = true;
+}
+
+void stage5_boss_activate(State &state) noexcept
+{
+	state.boss_active = true;
+}
+
+bool stage5_fights_update(State &state, Presentation &presentation) noexcept
+{
+	if(state.midboss_callback_active && !stage5_midboss_update(state, presentation)) return false;
+	if(state.boss_active && !stage5_yumeko_update(state, presentation)) return false;
+	return true;
+}
+
+void stage5_fights_render_tail(State &state, Presentation &presentation) noexcept
+{
+	// m5.cpp uses midboss_put_generic() after the large top clip.  The generic
+	// branch clears only a hit flash that reached a visible blit (y >= 16 px).
+	if(state.midboss_active && state.midboss.phase < phase_explode_big &&
+		state.midboss.pos.cur.y >= 256 && state.midboss.damage_this_frame != 0U) {
+		state.midboss.damage_this_frame = 0U;
+	}
+	// b5_fg clears Yumeko's flash in its non-explosion branch regardless of
+	// clipping, unlike the earlier stage boss renderers.
+	if(state.boss_active && state.boss.phase != phase_explode_big) {
+		state.boss.damage_this_frame = 0U;
+	}
+	swords_render_tail(state);
+	fights_render_tail_explosions(state);
+	(void)presentation;
+}
+
+enum class Stage6PatternResult : std::uint8_t {
+	running,
+	completed,
+	unsupported,
+};
+
+[[nodiscard]] static std::uint8_t stage6_rank_select(
+	const State &state, std::uint8_t easy, std::uint8_t normal,
+	std::uint8_t hard, std::uint8_t lunatic
+) noexcept
+{
+	return stage5_rank_select(state, easy, normal, hard, lunatic);
+}
+
+[[nodiscard]] static bool stage6_wing_random_x(State &state, std::int16_t &x) noexcept
+{
+	const auto random = pc98::th0405::randring_next16_mod(
+		state.random, static_cast<std::uint16_t>(shinki_wing_width)
+	);
+	if(!random) return false;
+	x = word_add(
+		word_add(state.boss.pos.cur.x, static_cast<std::int16_t>(*random)),
+		static_cast<std::int16_t>(-(shinki_wing_width / 2))
+	);
+	return true;
+}
+
+[[nodiscard]] static bool stage6_wing_random_y(State &state, std::int16_t &y) noexcept
+{
+	const auto random = pc98::th0405::randring_next16_mod(
+		state.random, static_cast<std::uint16_t>((shinki_wing_height / 3) * 2)
+	);
+	if(!random) return false;
+	y = word_add(
+		word_sub(state.boss.pos.cur.y, static_cast<std::int16_t>(*random)),
+		static_cast<std::int16_t>((shinki_wing_height - 1024) / 2)
+	);
+	return true;
+}
+
+[[nodiscard]] static bool stage6_player_angle(
+	const State &state, BossPoint origin, std::uint8_t &angle
+) noexcept
+{
+	const auto result = pc98::masterlib::iatan2_source(
+		word_sub(state.player_pos.cur.y, origin.y), word_sub(state.player_pos.cur.x, origin.x)
+	);
+	if(!result) return false;
+	angle = *result;
+	return true;
+}
+
+[[nodiscard]] static Stage6PatternResult stage6_pattern_curved_rings(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	if(boss.phase_frame == 32) {
+		const auto angle = pc98::th0405::randring_next16(state.random);
+		const auto direction = pc98::th0405::randring_next16_and(state.random, 1U);
+		if(!angle || !direction) return Stage6PatternResult::unsupported;
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.patnum = pat_bullet16_outlined_ball_blue;
+		bullet.speed = 32U;
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::ring);
+		bullet.special_motion = static_cast<std::uint8_t>(BulletSpecialMotion::exact_linear);
+		bullet.angle = static_cast<std::uint8_t>(*angle);
+		bullet.spread = 16U;
+		boss.statebytes[15U] = *direction == 0U ? static_cast<std::uint8_t>(-2) : 2U;
+		if(!bullet_template_tune(state)) return Stage6PatternResult::unsupported;
+		presentation.sound(15U);
+	}
+	if((boss.phase_frame % 4) == 0) {
+		if(!bullets_add_special(state)) return Stage6PatternResult::unsupported;
+		bullet.speed = byte_add(bullet.speed, 8);
+		bullet.angle = byte_add(bullet.angle, static_cast<std::int8_t>(boss.statebytes[15U]));
+	}
+	return boss.phase_frame == 60 ? Stage6PatternResult::completed : Stage6PatternResult::running;
+}
+
+[[nodiscard]] static Stage6PatternResult stage6_pattern_dualspeed_rings(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	if(boss.phase_frame == 32) {
+		const auto angle = pc98::th0405::randring_next16(state.random);
+		if(!angle) return Stage6PatternResult::unsupported;
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.patnum = pat_bullet16_ball_blue;
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::ring);
+		bullet.angle = static_cast<std::uint8_t>(*angle);
+		bullet.spread = 16U;
+		boss.statebytes[15U] = stage6_rank_select(state, 16U, 12U, 8U, 4U);
+	}
+	if((boss.phase_frame % boss.statebytes[15U]) == 0) {
+		const auto distance = pc98::th0405::randring_next16_mod(state.random, 512U);
+		if(!distance) return Stage6PatternResult::unsupported;
+		const auto offset = pc98::masterlib::vector2(
+			bullet.angle, static_cast<std::int16_t>(*distance)
+		);
+		bullet.origin = {
+			word_add(boss.pos.cur.x, offset.x), word_add(boss.pos.cur.y, offset.y)
+		};
+		bullet.speed = 32U;
+		if(!bullets_add_regular(state)) return Stage6PatternResult::unsupported;
+		bullet.speed = 64U;
+		bullet.angle = byte_add(bullet.angle, 8);
+		if(!bullets_add_regular(state)) return Stage6PatternResult::unsupported;
+		presentation.sound(3U);
+	}
+	return boss.phase_frame == 96 ? Stage6PatternResult::completed : Stage6PatternResult::running;
+}
+
+[[nodiscard]] static Stage6PatternResult stage6_pattern_random_directional_and_kunai(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	if(boss.phase_frame == 32) {
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.speed = 28U;
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::random_angle_and_speed);
+		bullet.spread = 3U;
+		if(!bullet_template_tune(state)) return Stage6PatternResult::unsupported;
+		presentation.sound(15U);
+	}
+	if((boss.phase_frame & 1) == 0) {
+		bullet.patnum = pat_bullet16_directional_blue;
+		bullet.origin.x = word_sub(bullet.origin.x, 256);
+		if(!bullets_add_regular(state)) return Stage6PatternResult::unsupported;
+		bullet.patnum = pat_bullet16_vector_blue;
+		bullet.origin.x = word_add(bullet.origin.x, 512);
+		if(!bullets_add_regular(state)) return Stage6PatternResult::unsupported;
+	}
+	const auto flight = boss_flystep_random(state, static_cast<std::int16_t>(boss.phase_frame - 64));
+	if(flight == FlyResult::unsupported) return Stage6PatternResult::unsupported;
+	return flight == FlyResult::complete ? Stage6PatternResult::completed : Stage6PatternResult::running;
+}
+
+[[nodiscard]] static Stage6PatternResult stage6_pattern_dense_blue_stacks(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	if(boss.phase_frame == 32) {
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.patnum = pat_bullet16_ball_blue;
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::spread_stack_aimed);
+		bullet.angle = 0U;
+		bullet.spread = 2U;
+		bullet.spread_angle_delta = 4U;
+		bullet.stack = stage6_rank_select(state, 5U, 6U, 6U, 7U);
+		bullet.stack_speed_delta = stage6_rank_select(state, 12U, 12U, 13U, 13U);
+		bullet.speed = 32U;
+	}
+	if((boss.phase_frame % 4) == 0) {
+		if(!bullets_add_regular(state)) return Stage6PatternResult::unsupported;
+		presentation.sound(15U);
+	}
+	const auto flight = boss_flystep_random(state, static_cast<std::int16_t>(boss.phase_frame - 64));
+	if(flight == FlyResult::unsupported) return Stage6PatternResult::unsupported;
+	return flight == FlyResult::complete ? Stage6PatternResult::completed : Stage6PatternResult::running;
+}
+
+[[nodiscard]] static Stage6PatternResult stage6_phase_2_3_with_pattern(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.phase_frame < 32) {
+		gather_add_only_3stack(state, static_cast<std::int16_t>(boss.phase_frame - 16), 7U, 6U);
+		if(boss.phase_frame == 2) {
+			auto &bullet = state.bullets.bullet_template;
+			boss.sprite = pat_shinki_cast;
+			bullet.spawn_type = static_cast<std::uint8_t>(
+				bullet_spawn_type_cloud_backwards | bullet_spawn_type_no_decelerate
+			);
+			bullet.patnum = pat_bullet16_ball_red;
+			bullet.group = static_cast<std::uint8_t>(BulletGroup::ring);
+			bullet.speed = 60U;
+			bullet.spread = 16U;
+			if(!bullet_template_tune(state)) return Stage6PatternResult::unsupported;
+			presentation.sound(8U);
+		}
+		return Stage6PatternResult::running;
+	}
+	Stage6PatternResult result{};
+	switch(state.stage6.phase_2_3_pattern) {
+	case Stage6Phase23Pattern::curved_rings:
+		result = stage6_pattern_curved_rings(state, presentation);
+		break;
+	case Stage6Phase23Pattern::dualspeed_rings:
+		result = stage6_pattern_dualspeed_rings(state, presentation);
+		break;
+	case Stage6Phase23Pattern::random_directional_and_kunai:
+		result = stage6_pattern_random_directional_and_kunai(state, presentation);
+		break;
+	case Stage6Phase23Pattern::dense_blue_stacks:
+		result = stage6_pattern_dense_blue_stacks(state, presentation);
+		break;
+	default:
+		return Stage6PatternResult::unsupported;
+	}
+	if(result == Stage6PatternResult::completed) {
+		boss.sprite = pat_shinki_still;
+		boss.phase_frame = 0;
+		boss.mode = 0U;
+	}
+	return result;
+}
+
+[[nodiscard]] static Stage6PatternResult stage6_pattern_wing_preparation(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &laser = state.lasers.laser_template;
+	if(boss.phase_frame == 16) {
+		constexpr std::array<std::uint8_t, 6U> angles{0x50U, 0x48U, 0x40U, 0x40U, 0x38U, 0x30U};
+		for(std::uint8_t slot{}; slot < angles.size(); ++slot) {
+			laser.coords.angle = angles[slot];
+			if(!laser_manual_fixed_spawn(state, slot, presentation)) return Stage6PatternResult::unsupported;
+		}
+		boss.sprite = pat_shinki_cast;
+		boss.statebytes[15U] = 0U;
+		boss.statebytes[14U] = 100U;
+		presentation.sound(8U);
+	}
+	if(boss.phase_frame <= 16) return Stage6PatternResult::running;
+	if(state.lasers.pool[2U].coords.angle < 0x80U) {
+		if((state.stage_frame & 1U) != 0U) {
+			for(std::uint8_t slot{}; slot < 3U; ++slot) {
+				state.lasers.pool[slot].coords.angle = byte_add(state.lasers.pool[slot].coords.angle, 1);
+			}
+			for(std::uint8_t slot{3U}; slot < 6U; ++slot) {
+				state.lasers.pool[slot].coords.angle = byte_add(state.lasers.pool[slot].coords.angle, -1);
+			}
+			state.palette_tone = boss.statebytes[14U];
+			state.palette_changed = true;
+			++boss.statebytes[14U];
+		}
+		return Stage6PatternResult::running;
+	}
+	if(boss.statebytes[15U] == 0U) {
+		auto &bullet = state.bullets.bullet_template;
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.patnum = pat_bullet16_ball_blue;
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::single);
+		if(!bullet_template_tune(state)) return Stage6PatternResult::unsupported;
+		for(std::uint8_t i{}; i < 50U; ++i) {
+			if(!stage6_wing_random_x(state, bullet.origin.x) || !stage6_wing_random_y(state, bullet.origin.y)) {
+				return Stage6PatternResult::unsupported;
+			}
+			const auto angle = pc98::th0405::randring_next16_mod(state.random, 0x60U);
+			const auto speed = pc98::th0405::randring_next16_and(state.random, 63U);
+			if(!angle || !speed) return Stage6PatternResult::unsupported;
+			bullet.angle = static_cast<std::uint8_t>(*angle + 0x10U);
+			bullet.speed = static_cast<std::uint8_t>(*speed + 24U);
+			if(!bullets_add_regular(state)) return Stage6PatternResult::unsupported;
+		}
+		boss.sprite = pat_shinki_wings_white;
+		for(std::uint8_t slot{}; slot < 6U; ++slot) {
+			if(!laser_manual_grow(state, slot, presentation)) return Stage6PatternResult::unsupported;
+		}
+		presentation.sound(15U);
+		state.playfield_shake_anim_time = 8;
+	} else {
+		state.palette_tone = (state.stage_frame & 1U) != 0U ? 150U : 100U;
+		state.palette_changed = true;
+		if(boss.statebytes[15U] >= 8U) {
+			state.palette_tone = 100U;
+			for(std::uint8_t slot{}; slot < 6U; ++slot) {
+				if(!laser_stop(state, slot)) return Stage6PatternResult::unsupported;
+			}
+			return Stage6PatternResult::completed;
+		}
+	}
+	++boss.statebytes[15U];
+	return Stage6PatternResult::running;
+}
+
+[[nodiscard]] static bool stage6_pattern_random_rain_and_spreads(State &state, Presentation &presentation) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.phase_frame <= 128) return true;
+	if((boss.phase_frame % 8) == 0) {
+		auto &b6ball = state.b6balls.b6ball_template;
+		const auto x = pc98::th0405::randring_next16_mod(state.random, 6144U);
+		const auto y = pc98::th0405::randring_next16_mod(state.random, 1024U);
+		const auto speed = pc98::th0405::randring_next16_and(state.random, 31U);
+		if(!x || !y || !speed) return false;
+		b6ball.origin.x = static_cast<std::int16_t>(*x);
+		b6ball.origin.y = static_cast<std::int16_t>(*y + 512U);
+		b6ball.angle = 0x40U;
+		b6ball.speed = static_cast<std::uint8_t>(*speed + 48U);
+		b6ball.patnum_tiny = 200;
+		b6balls_add(state);
+		presentation.sound(3U);
+	}
+	if((boss.phase_frame % 24) == 0) {
+		auto &bullet = state.bullets.bullet_template;
+		if(!stage6_wing_random_x(state, bullet.origin.x)) return false;
+		const auto y = pc98::th0405::randring_next16_mod(state.random, 1024U);
+		if(!y) return false;
+		bullet.origin.y = word_sub(boss.pos.cur.y, static_cast<std::int16_t>(*y));
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.patnum = pat_bullet16_ball_blue;
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::spread_aimed);
+		bullet.spread = 5U;
+		bullet.spread_angle_delta = stage6_rank_select(state, 16U, 12U, 10U, 8U);
+		bullet.angle = 0U;
+		bullet.speed = 48U;
+		if(!bullet_template_tune(state) || !bullets_add_regular(state)) return false;
+	}
+	return true;
+}
+
+[[nodiscard]] static bool stage6_pattern_cheetos_within_spread_walls(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.phase_frame < 128) return true;
+	if(boss.phase_frame == 128) {
+		boss.statebytes[14U] = stage6_rank_select(state, 128U, 48U, 32U, 24U);
+		boss.statebytes[15U] = stage6_rank_select(state, 32U, 40U, 48U, 56U);
+	}
+	const auto frame_in_cycle = static_cast<std::uint16_t>(
+		boss.phase_frame % static_cast<std::int16_t>(boss.statebytes[14U])
+	);
+	if((frame_in_cycle & 7U) != 0U) return true;
+	auto &bullet = state.bullets.bullet_template;
+	const auto random_speed = pc98::th0405::randring_next16_and(state.random, 31U);
+	if(!random_speed) return false;
+	bullet.patnum = pat_bullet16_outlined_ball_blue;
+	bullet.spawn_type = static_cast<std::uint8_t>(
+		bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+	);
+	bullet.group = static_cast<std::uint8_t>(BulletGroup::spread);
+	bullet.speed = static_cast<std::uint8_t>(*random_speed + 48U);
+	bullet.spread = 6U;
+	bullet.spread_angle_delta = 8U;
+	bullet.angle = 0x68U;
+	if(!bullets_add_regular(state)) return false;
+	bullet.angle = 0x18U;
+	if(!bullets_add_regular(state)) return false;
+	if(frame_in_cycle != 0U) return true;
+	const auto direction = pc98::th0405::randring_next16_mod(state.random, 3U);
+	if(!direction) return false;
+	CheetoTemplate cheeto{};
+	cheeto.color = 11U;
+	cheeto.speed = 64U;
+	cheeto.angle = static_cast<std::uint8_t>(*direction * 0x40U);
+	cheeto.origin = state.b6balls.b6ball_template.origin;
+	stage6_cheetos_add(state, cheeto);
+	presentation.sound(3U);
+	return true;
+}
+
+[[nodiscard]] static Stage6PatternResult stage6_pattern_wings_to_purple(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.phase_frame < 160) return Stage6PatternResult::running;
+	if(boss.phase_frame < 192) {
+		boss.pos.cur.y = word_add(boss.pos.cur.y, (boss.phase_frame & 1) != 0 ? 32 : -32);
+		return Stage6PatternResult::running;
+	}
+	if(boss.phase_frame == 192) {
+		auto &b6ball = state.b6balls.b6ball_template;
+		b6ball.patnum_tiny = 201;
+		for(std::uint8_t i{}; i < 16U; ++i) {
+			if(!stage6_wing_random_x(state, b6ball.origin.x) || !stage6_wing_random_y(state, b6ball.origin.y)) {
+				return Stage6PatternResult::unsupported;
+			}
+			const auto angle = pc98::th0405::randring_next16_mod(state.random, 0x40U);
+			const auto speed = pc98::th0405::randring_next16_and(state.random, 63U);
+			if(!angle || !speed) return Stage6PatternResult::unsupported;
+			b6ball.angle = static_cast<std::uint8_t>(*angle + 0x20U);
+			b6ball.speed = static_cast<std::uint8_t>(*speed + 32U);
+			b6balls_add(state);
+		}
+		boss.sprite = pat_shinki_wings_purple;
+		presentation.sound(15U);
+		state.playfield_shake_anim_time = 8;
+	}
+	return boss.phase_frame == 200 ? Stage6PatternResult::completed : Stage6PatternResult::running;
+}
+
+[[nodiscard]] static bool stage6_pattern_aimed_b6balls_and_symmetric_spreads(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.phase_frame <= 128) return true;
+	if(boss.phase_frame == 129) {
+		boss.statebytes[15U] = stage6_rank_select(state, 96U, 32U, 28U, 24U);
+	}
+	if((boss.phase_frame % boss.statebytes[15U]) == 0) {
+		auto &b6ball = state.b6balls.b6ball_template;
+		if(!stage6_player_angle(state, b6ball.origin, b6ball.angle)) return false;
+		b6ball.speed = 64U;
+		b6ball.patnum_tiny = 201;
+		b6balls_add(state);
+	}
+	if((boss.phase_frame % 4) != 0) return true;
+	auto &bullet = state.bullets.bullet_template;
+	bullet.origin.x = word_sub(bullet.origin.x, shinki_wing_width / 2);
+	bullet.group = static_cast<std::uint8_t>(BulletGroup::spread);
+	bullet.special_motion = static_cast<std::uint8_t>(BulletSpecialMotion::exact_linear);
+	bullet.spread = 3U;
+	bullet.spread_angle_delta = 2U;
+	bullet.spawn_type = static_cast<std::uint8_t>(
+		bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+	);
+	bullet.speed = 40U;
+	bullet.patnum = pat_bullet16_vector_red;
+	const auto spread_cycle = static_cast<std::uint16_t>(boss.phase_frame % 128);
+	bullet.angle = spread_cycle < 64U ? static_cast<std::uint8_t>(spread_cycle * 3U) :
+		static_cast<std::uint8_t>(64U - (spread_cycle * 3U));
+	if(!bullets_add_special(state)) return false;
+	bullet.angle = static_cast<std::uint8_t>(0x80U - bullet.angle);
+	bullet.origin.x = word_add(bullet.origin.x, shinki_wing_width);
+	if(!bullets_add_special(state)) return false;
+	presentation.sound(15U);
+	return true;
+}
+
+[[nodiscard]] static bool stage6_pattern_devil(State &state, Presentation &presentation) noexcept
+{
+	auto &boss = state.boss;
+	auto &laser = state.lasers.laser_template;
+	if(boss.phase_frame < 192) return true;
+	if((boss.hp <= shinki_phase_10_devil_laser_hp || boss.phase_frame >= 1800) &&
+		state.stage6.devil_laser_grow_delay == 0U) {
+		laser.coords.width = 6U;
+		laser.coords.angle = 0x40U;
+		laser.color = 14U;
+		laser.coords.origin.x = word_add(laser.coords.origin.x, 1536);
+		for(std::uint8_t slot{}; slot < 4U; ++slot) {
+			if(!laser_manual_fixed_spawn(state, slot, presentation)) return false;
+			if(slot < 3U) laser.coords.origin.x = word_sub(laser.coords.origin.x, 1024);
+		}
+		++state.stage6.devil_laser_grow_delay;
+		boss_explode_small(state, presentation, 0U);
+	}
+	if((boss.phase_frame % 4) == 0) {
+		auto &bullet = state.bullets.bullet_template;
+		if(boss.phase_frame == 192) {
+			boss.statebytes[14U] = 0x20U;
+			boss.statebytes[15U] = 0U;
+			boss.statebytes[13U] = stage6_rank_select(state, 64U, 40U, 32U, 28U);
+			boss.statebytes[12U] = 0U;
+			boss.statebytes[11U] = 0U;
+			boss.statebytes[10U] = 0U;
+			boss.statebytes[8U] = 0x40U;
+			boss.statebytes[9U] = 0x40U;
+			boss.statebytes[7U] = 0U;
+		}
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.patnum = pat_bullet16_vector_red;
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::spread);
+		if(boss.statebytes[15U] == 0x40U && boss.statebytes[12U] == 0U) {
+			++boss.statebytes[12U];
+		}
+		bullet.spread = boss.statebytes[12U] == 0U ? 1U : 3U;
+		bullet.spread_angle_delta = 0x30U;
+		bullet.speed = 112U;
+		bullet.origin.x = word_add(bullet.origin.x, 1536);
+		bullet.angle = boss.statebytes[15U];
+		if(!bullets_add_regular_fixedspeed(state)) return false;
+		bullet.origin.x = word_sub(bullet.origin.x, 1024);
+		bullet.angle = boss.statebytes[14U];
+		if(!bullets_add_regular_fixedspeed(state)) return false;
+		bullet.origin.x = word_sub(bullet.origin.x, 1024);
+		bullet.angle = static_cast<std::uint8_t>(0x80U - boss.statebytes[14U]);
+		if(!bullets_add_regular_fixedspeed(state)) return false;
+		bullet.origin.x = word_sub(bullet.origin.x, 1024);
+		bullet.angle = static_cast<std::uint8_t>(0x80U - boss.statebytes[15U]);
+		if(!bullets_add_regular_fixedspeed(state)) return false;
+		if(boss.statebytes[12U] == 0U) {
+			boss.statebytes[15U] = byte_add(boss.statebytes[15U], 4);
+			boss.statebytes[14U] = byte_add(boss.statebytes[14U], 2);
+		} else {
+			bullet.patnum = 0U;
+			bullet.spawn_type = bullet_spawn_type_no_decelerate;
+			bullet.spread = 3U;
+			bullet.spread_angle_delta = 0x30U;
+			bullet.angle = byte_add(boss.statebytes[15U], 0x80);
+			bullet.origin.x = word_add(bullet.origin.x, 3072);
+			if(!bullets_add_regular_fixedspeed(state)) return false;
+			bullet.origin.x = word_sub(bullet.origin.x, 1024);
+			bullet.angle = byte_add(boss.statebytes[14U], 0x80);
+			if(!bullets_add_regular_fixedspeed(state)) return false;
+			bullet.origin.x = word_sub(bullet.origin.x, 1024);
+			bullet.angle = byte_add(static_cast<std::uint8_t>(-boss.statebytes[14U]), 0);
+			if(!bullets_add_regular_fixedspeed(state)) return false;
+			bullet.origin.x = word_sub(bullet.origin.x, 1024);
+			bullet.angle = static_cast<std::uint8_t>(-boss.statebytes[15U]);
+			if(!bullets_add_regular_fixedspeed(state)) return false;
+			if(boss.statebytes[11U] == 0U) {
+				boss.statebytes[15U] = byte_add(boss.statebytes[15U], -2);
+				boss.statebytes[14U] = byte_add(boss.statebytes[14U], -1);
+				if(boss.statebytes[15U] == 0x30U) ++boss.statebytes[11U];
+			} else {
+				boss.statebytes[15U] = byte_add(boss.statebytes[15U], 2);
+				boss.statebytes[14U] = byte_add(boss.statebytes[14U], 1);
+				if(boss.statebytes[15U] == 0x40U) --boss.statebytes[11U];
+			}
+		}
+		if(boss.statebytes[12U] != 0U && (boss.phase_frame % boss.statebytes[13U]) == 0) {
+			auto &b6ball = state.b6balls.b6ball_template;
+			if(!stage6_wing_random_x(state, b6ball.origin.x) || !stage6_wing_random_y(state, b6ball.origin.y) ||
+				!stage6_player_angle(state, b6ball.origin, b6ball.angle)) return false;
+			b6ball.speed = 60U;
+			b6ball.patnum_tiny = 201;
+			b6balls_add(state);
+		}
+		presentation.sound(3U);
+	}
+	if(state.stage6.devil_laser_grow_delay == 0U) return true;
+	if(state.stage6.devil_laser_grow_delay < 64U) {
+		++state.stage6.devil_laser_grow_delay;
+		return true;
+	}
+	if(state.stage6.devil_laser_grow_delay == 64U) {
+		for(std::uint8_t slot{}; slot < 4U; ++slot) {
+			if(!laser_manual_grow(state, slot, presentation)) return false;
+		}
+		++state.stage6.devil_laser_grow_delay;
+		return true;
+	}
+	if(boss.statebytes[10U] == 0U) {
+		if(boss.statebytes[15U] == 0x30U) ++boss.statebytes[10U];
+		return true;
+	}
+	if((boss.phase_frame % 8) != 0) return true;
+	state.lasers.pool[0U].coords.angle = boss.statebytes[9U];
+	state.lasers.pool[1U].coords.angle = boss.statebytes[8U];
+	state.lasers.pool[2U].coords.angle = static_cast<std::uint8_t>(0x80U - boss.statebytes[8U]);
+	state.lasers.pool[3U].coords.angle = static_cast<std::uint8_t>(0x80U - boss.statebytes[9U]);
+	if(boss.statebytes[7U] == 0U) {
+		++boss.statebytes[9U];
+		boss.statebytes[8U] = byte_add(boss.statebytes[8U], -1);
+		if(boss.statebytes[8U] == 0x38U) ++boss.statebytes[7U];
+	} else {
+		boss.statebytes[9U] = byte_add(boss.statebytes[9U], -1);
+		++boss.statebytes[8U];
+		if(boss.statebytes[8U] == 0x41U) --boss.statebytes[7U];
+	}
+	if((boss.hp <= shinki_phase_10_devil_fast_hp || boss.phase_frame >= 2500) &&
+		state.stage6.devil_laser_grow_delay++ == 65U) {
+		boss.statebytes[13U] = stage6_rank_select(state, 52U, 20U, 16U, 12U);
+		boss_explode_small(state, presentation, 0U);
+	}
+	return true;
+}
+
+[[nodiscard]] static bool stage6_pattern_circles_and_alternating_spirals(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &b6ball = state.b6balls.b6ball_template;
+	if(boss.phase_frame < 128) return true;
+	if(boss.phase_frame == 128) {
+		b6ball.angle = 0U;
+		boss.statebytes[15U] = 0U;
+		boss.statebytes[14U] = 0U;
+	}
+	if((boss.phase_frame % 8) == 0) {
+		b6ball.patnum_tiny = 200;
+		const auto offset = pc98::masterlib::vector2(b6ball.angle, 1024);
+		b6ball.origin = {word_add(boss.pos.cur.x, offset.x), word_add(boss.pos.cur.y, offset.y)};
+		b6balls_add(state);
+		b6ball.angle = byte_add(b6ball.angle, 0x80);
+		const auto opposite = pc98::masterlib::vector2(b6ball.angle, 1024);
+		b6ball.origin = {word_add(boss.pos.cur.x, opposite.x), word_add(boss.pos.cur.y, opposite.y)};
+		b6balls_add(state);
+		b6ball.angle = byte_add(b6ball.angle, -0x78);
+		presentation.sound(3U);
+	}
+	if(boss.phase_frame >= 256) {
+		const auto frame_in_cycle = static_cast<std::uint16_t>(boss.phase_frame % 256);
+		auto &bullet = state.bullets.bullet_template;
+		if((boss.phase_frame % 8) == 0 && frame_in_cycle < 128U) {
+			bullet.spawn_type = static_cast<std::uint8_t>(
+				bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+			);
+			bullet.group = static_cast<std::uint8_t>(BulletGroup::ring);
+			bullet.angle = boss.statebytes[15U];
+			bullet.patnum = pat_bullet16_vector_red;
+			bullet.speed = 32U;
+			bullet.spread = 12U;
+			if(!bullets_add_regular(state)) return false;
+			boss.statebytes[15U] = byte_add(boss.statebytes[15U], -2);
+		}
+		if(boss.phase_frame >= 512 && (boss.phase_frame % 8) == 0 && frame_in_cycle >= 128U) {
+			bullet.spawn_type = static_cast<std::uint8_t>(
+				bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+			);
+			bullet.group = static_cast<std::uint8_t>(BulletGroup::ring);
+			bullet.angle = boss.statebytes[14U];
+			bullet.patnum = 0U;
+			bullet.speed = 32U;
+			bullet.spread = 12U;
+			if(!bullets_add_regular(state)) return false;
+			boss.statebytes[14U] = byte_add(boss.statebytes[14U], 4);
+		}
+	}
+	if(boss.phase_frame >= 720) {
+		const auto flight = boss_flystep_random(
+			state, static_cast<std::int16_t>((boss.phase_frame - 720) % 128 - 96)
+		);
+		if(flight == FlyResult::unsupported) return false;
+	}
+	return true;
+}
+
+static void stage6_move_float(State &state) noexcept
+{
+	if((state.stage_frame & 3U) != 0U) return;
+	auto &boss = state.boss;
+	if(!state.stage6.float_direction) {
+		boss.pos.velocity.y = word_add(boss.pos.velocity.y, 1);
+		if(boss.pos.velocity.y >= 16) state.stage6.float_direction = true;
+	} else {
+		boss.pos.velocity.y = word_sub(boss.pos.velocity.y, 1);
+		if(boss.pos.velocity.y <= -16) state.stage6.float_direction = false;
+	}
+	boss.pos.cur.y = word_add(boss.pos.cur.y, boss.pos.velocity.y);
+}
+
+[[nodiscard]] static bool stage6_phase_2_3_next(State &state, Presentation &presentation) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.statebytes[10U] == 0U) {
+		if(!boss_phase_next(state, presentation, 1U, shinki_phase_3_end_hp)) return false;
+		boss.mode = 1U;
+		state.stage6.phase_2_3_pattern = Stage6Phase23Pattern::random_directional_and_kunai;
+	} else if(!boss_phase_next(state, presentation, 1U, shinki_phase_6_end_hp)) {
+		return false;
+	}
+	++boss.statebytes[10U];
+	return true;
+}
+
+[[nodiscard]] static bool stage6_shinki_update(State &state, Presentation &presentation) noexcept
+{
+	auto &boss = state.boss;
+	state.shots.homing_target = boss.pos.cur;
+	state.bullets.bullet_template.origin = boss.pos.cur;
+	state.bullets.gather_template.center = boss.pos.cur;
+	state.lasers.laser_template.coords.origin = boss.pos.cur;
+	state.b6balls.b6ball_template.origin = boss.pos.cur;
+	++boss.phase_frame;
+
+	switch(boss.phase) {
+	case 0U:
+		if(boss.phase_frame == 1) {
+			boss.hp = shinki_hp_total;
+			boss.phase_end_hp = shinki_phase_2_end_hp;
+			state.bullets.gather_template.radius = 1024;
+			state.bullets.gather_template.angle_delta = 2U;
+			state.bullets.gather_template.ring_points = 8;
+			boss.sprite = pat_shinki_still;
+			boss.pos.velocity.y = 0;
+			boss.sprite_left = pat_shinki_left;
+			boss.sprite_right = pat_shinki_right;
+			boss.sprite_stay = pat_shinki_still;
+		}
+		if(!boss_hittest_invincible(state, presentation)) return false;
+		if(boss.phase_frame >= 192) {
+			boss.phase_frame = 0;
+			++boss.phase;
+			presentation.sound(13U);
+		}
+		break;
+
+	case 1U:
+		if(!boss_hittest_invincible(state, presentation)) return false;
+		if(boss.phase_frame == 32) {
+			state.palette[0U] = {};
+			state.palette_changed = true;
+		}
+		if(boss.phase_frame >= 64) {
+			++boss.phase;
+			boss.mode = 1U;
+			boss.phase_frame = 0;
+			state.stage6.phase_2_3_pattern = Stage6Phase23Pattern::curved_rings;
+			boss.statebytes[10U] = 0U;
+		}
+		break;
+
+	case 2U:
+	case 3U:
+		if(boss.mode == 0U) {
+			const auto flight = boss_flystep_random(
+				state, static_cast<std::int16_t>(boss.phase_frame - 32)
+			);
+			if(flight == FlyResult::unsupported) return false;
+			if(flight == FlyResult::complete) {
+				boss.phase_frame = 0;
+				++boss.phase_state;
+				++boss.mode;
+				if(boss.statebytes[10U] == 0U) {
+					state.stage6.phase_2_3_pattern = (boss.phase_state & 1U) == 0U ?
+						Stage6Phase23Pattern::curved_rings : Stage6Phase23Pattern::dualspeed_rings;
+				} else {
+					state.stage6.phase_2_3_pattern = (boss.phase_state & 1U) == 0U ?
+						Stage6Phase23Pattern::random_directional_and_kunai :
+						Stage6Phase23Pattern::dense_blue_stacks;
+				}
+				if(boss.phase_state >= 16U) {
+					if(!stage6_phase_2_3_next(state, presentation)) return false;
+					break;
+				}
+			}
+		} else if(boss.mode == 1U) {
+			const auto result = stage6_phase_2_3_with_pattern(state, presentation);
+			if(result == Stage6PatternResult::unsupported) return false;
+		}
+		if(!boss_hittest(state, presentation)) break;
+		if(!boss_score_bonus(state, presentation, 10U)) return false;
+		if(!stage6_phase_2_3_next(state, presentation)) return false;
+		break;
+
+	case 4U:
+		(void)boss_hittest(state, presentation);
+		if(boss_flystep_towards(state, 3072, 1280)) {
+			++boss.phase;
+			boss.phase_frame = 0;
+		}
+		break;
+
+	case 5U: {
+		(void)boss_hittest(state, presentation);
+		const auto result = stage6_pattern_wing_preparation(state, presentation);
+		if(result == Stage6PatternResult::unsupported) return false;
+		if(result == Stage6PatternResult::completed) {
+			++boss.phase;
+			boss.phase_frame = 0;
+			boss.pos.velocity.y = 0;
+			switch(state.playchar) {
+			case 0U: boss.hitbox_radius.x = 800; break;
+			case 1U: boss.hitbox_radius.x = 560; break;
+			case 2U: boss.hitbox_radius.x = 720; break;
+			case 3U: boss.hitbox_radius.x = 800; break;
+			default: return false;
+			}
+			state.stage6.wing_pattern = Stage6WingPattern::random_rain_and_spreads;
+			boss.statebytes[10U] = 0U;
+		}
+		break;
+	}
+
+	case 6U:
+	case 7U: {
+		if(state.palette[0U].b < 0x80U) {
+			if((state.stage_frame & 15U) == 0U) ++state.palette[0U].b;
+			state.palette_changed = true;
+		}
+		stage6_move_float(state);
+		if(state.stage6.wing_pattern == Stage6WingPattern::random_rain_and_spreads) {
+			if(!stage6_pattern_random_rain_and_spreads(state, presentation)) return false;
+		} else if(state.stage6.wing_pattern == Stage6WingPattern::cheetos_within_spread_walls) {
+			if(!stage6_pattern_cheetos_within_spread_walls(state, presentation)) return false;
+		} else {
+			return false;
+		}
+		if(boss.phase_frame < 3000 && !boss_hittest(state, presentation)) break;
+		if(boss.phase_frame < 3000 && !boss_score_bonus(state, presentation, 25U)) return false;
+		if(boss.statebytes[10U] == 0U) {
+			if(!boss_phase_next(state, presentation, 2U, shinki_phase_7_end_hp)) return false;
+			state.stage6.wing_pattern = Stage6WingPattern::cheetos_within_spread_walls;
+			boss.phase_frame = 0;
+			++boss.statebytes[10U];
+		} else if(!boss_phase_next(state, presentation, 3U, shinki_phase_9_end_hp)) {
+			return false;
+		}
+		break;
+	}
+
+	case 8U: {
+		// b6.cpp's purple-wing callback has a three-way source result: live,
+		// complete, or a reached operation failure while populating its B6 pool.
+		if(state.palette[0U].b > 0U) {
+			if((state.stage_frame & 7U) == 0U) --state.palette[0U].b;
+			state.palette_changed = true;
+		}
+		(void)boss_hittest(state, presentation);
+		const auto result = stage6_pattern_wings_to_purple(state, presentation);
+		if(result == Stage6PatternResult::unsupported) return false;
+		if(result == Stage6PatternResult::completed) {
+			++boss.phase;
+			boss.phase_frame = 0;
+			state.stage6.wing_pattern = Stage6WingPattern::aimed_b6balls_and_symmetric_spreads;
+			boss.statebytes[10U] = 0U;
+		}
+		break;
+	}
+
+	case 9U:
+	case 10U: {
+		if(state.palette[0U].b > 0U) {
+			if((state.stage_frame & 7U) == 0U) --state.palette[0U].b;
+			state.palette_changed = true;
+		} else if(state.palette[0U].r < 0x80U) {
+			if((state.stage_frame & 15U) == 0U) ++state.palette[0U].r;
+			state.palette_changed = true;
+		}
+		stage6_move_float(state);
+		if(state.stage6.wing_pattern == Stage6WingPattern::aimed_b6balls_and_symmetric_spreads) {
+			if(!stage6_pattern_aimed_b6balls_and_symmetric_spreads(state, presentation)) return false;
+		} else if(state.stage6.wing_pattern == Stage6WingPattern::devil) {
+			if(!stage6_pattern_devil(state, presentation)) return false;
+		} else {
+			return false;
+		}
+		if(boss.phase_frame < 3000) {
+			const bool phase_done = boss_hittest(state, presentation);
+			if(state.bombing) {
+				boss.hp = word_add(
+					boss.hp, static_cast<std::int16_t>(static_cast<std::int16_t>(boss.damage_this_frame) - 1)
+				);
+				break;
+			}
+			if(!phase_done) break;
+			if(!boss_score_bonus(state, presentation, 25U)) return false;
+		}
+		if(boss.statebytes[10U] == 0U) {
+			if(!boss_phase_next(state, presentation, 2U, shinki_phase_10_end_hp)) return false;
+			state.stage6.wing_pattern = Stage6WingPattern::devil;
+			boss.phase_frame = 0;
+			++boss.statebytes[10U];
+		} else {
+			if(!boss_phase_next(state, presentation, 3U, shinki_phase_12_end_hp)) return false;
+			state.playfield_shake_anim_time = 16;
+			for(std::uint8_t slot{}; slot < 4U; ++slot) {
+				if(!laser_stop(state, slot)) return false;
+			}
+		}
+		break;
+	}
+
+	case 11U:
+		(void)boss_hittest(state, presentation);
+		state.palette_tone = (boss.phase_frame & 1) == 0 ? 150U : 100U;
+		state.palette_changed = true;
+		if(boss.phase_frame > 16) {
+			++boss.phase;
+			boss.sprite = pat_shinki_still;
+			boss.hitbox_radius.x = 384;
+			state.palette[0U].r = 0x60U;
+			state.palette[0U].b = 0U;
+			presentation.sound(13U);
+		}
+		break;
+
+	case 12U:
+		if(!stage6_pattern_circles_and_alternating_spirals(state, presentation)) return false;
+		if(boss.phase_frame < 3000 && !boss_hittest(state, presentation)) break;
+		if(boss.phase_frame < 3000) boss.phase_state = 1U;
+		boss_explode_small(state, presentation, 4U);
+		boss.phase_frame = 0;
+		boss.phase = phase_explode_small;
+		break;
+
+	default:
+		if(!boss_defeat_update(state, presentation, 65U)) return false;
+		break;
+	}
+	// b6.cpp advances the native B6 overlay before its Cheeto view.  The
+	// order is gameplay-visible because the two views share these records.
+	b6balls_update(state);
+	if(!stage6_cheetos_update(state)) return false;
+	presentation.boss_hp(boss.hp, shinki_hp_total);
+	return true;
+}
+
+void stage6_fights_setup(State &state) noexcept
+{
+	state.midboss_active = false;
+	state.boss_active = false;
+	state.midboss.frames_until = 30000U;
+	state.boss.phase = 0U;
+	state.boss.mode = 0U;
+	state.boss.phase_state = 0U;
+	state.boss.phase_frame = 0;
+	state.boss.damage_this_frame = 0U;
+	state.boss.phase_timed_out = true;
+	state.boss.pos.cur = {3072, 1024};
+	state.boss.pos.prev = state.boss.pos.cur;
+	state.boss.pos.velocity = {};
+	state.boss.sprite = pat_shinki_still;
+	state.boss.hitbox_radius = {384, 384};
+	state.boss_explosions.small[0].alive = false;
+	state.boss_explosions.small[1].alive = false;
+}
+
+void stage6_midboss_activate(State &state) noexcept
+{
+	(void)state;
+}
+
+void stage6_boss_activate(State &state) noexcept
+{
+	state.boss_active = true;
+}
+
+bool stage6_fights_update(State &state, Presentation &presentation) noexcept
+{
+	return !state.boss_active || stage6_shinki_update(state, presentation);
+}
+
+void stage6_fights_render_tail(State &state, Presentation &presentation) noexcept
+{
+	if(state.boss_active && state.boss.phase != phase_explode_big) {
+		state.boss.damage_this_frame = 0U;
+	}
+	b6balls_render_tail(state);
+	fights_render_tail_explosions(state);
+	(void)presentation;
+}
+
+// Extra Stage boss EX-Alice.  bx_upd.cpp stores each current pattern in a
+// source callback pointer; ExtraState keeps the concrete selector instead.
+constexpr std::int16_t exalice_hp_total = 26500;
+constexpr std::int16_t exalice_phase_last_hp = 3400;
+constexpr std::int16_t exalice_fly_left = 32 * subpixel_factor;
+constexpr std::int16_t exalice_fly_right = (384 - 32) * subpixel_factor;
+constexpr std::int16_t exalice_fly_top = 48 * subpixel_factor;
+constexpr std::int16_t exalice_fly_bottom = 96 * subpixel_factor;
+
+enum class ExtraPatternResult : std::uint8_t {
+	running,
+	completed,
+	unsupported,
+};
+
+[[nodiscard]] static bool extra_player_angle(
+	const State &state, BossPoint origin, std::int16_t offset, std::uint8_t &angle
+) noexcept
+{
+	const auto target = pc98::masterlib::iatan2_source(
+		word_sub(state.player_pos.cur.y, origin.y), word_sub(state.player_pos.cur.x, origin.x)
+	);
+	if(!target) return false;
+	angle = byte_add(*target, offset);
+	return true;
+}
+
+// move.cpp's flystep uses common central direction fields but the mutable
+// clamp that bx_upd.cpp installs during EX-Alice's HP-fill phase.
+[[nodiscard]] static FlyResult extra_flystep_random(State &state, std::int16_t frame) noexcept
+{
+	auto &boss = state.boss;
+	if(frame == 0) {
+		if(boss.pos.cur.x < boss_fly_field_left) {
+			const auto random = pc98::th0405::randring_next16_mod(state.random, 96U);
+			if(!random) return FlyResult::unsupported;
+			boss.angle = byte_add(static_cast<std::uint8_t>(*random), -0x30);
+		} else if(boss.pos.cur.x > boss_fly_field_right) {
+			const auto random = pc98::th0405::randring_next16_and(state.random, 0x60U);
+			if(!random) return FlyResult::unsupported;
+			boss.angle = byte_add(static_cast<std::uint8_t>(*random), 0x30);
+		} else {
+			const auto random = pc98::th0405::randring_next16(state.random);
+			if(!random) return FlyResult::unsupported;
+			boss.angle = static_cast<std::uint8_t>(*random);
+		}
+		if((boss.flystep_next_y_direction == 1 && boss.angle < 0x80U) ||
+			(boss.flystep_next_y_direction == 2 && boss.angle >= 0x80U)) {
+			boss.angle = static_cast<std::uint8_t>(-boss.angle);
+		}
+		boss.flystep_next_y_direction = 0;
+	}
+	if(frame < 0) return FlyResult::moving;
+	const auto velocity = pc98::masterlib::vector2(
+		boss.angle, word(64 - static_cast<std::int32_t>(frame) * 2)
+	);
+	boss.pos.velocity = {velocity.x, velocity.y};
+	boss.pos.cur.x = word_add(boss.pos.cur.x, boss.pos.velocity.x);
+	boss.pos.cur.y = word_add(boss.pos.cur.y, boss.pos.velocity.y);
+	boss.sprite = boss.pos.velocity.x < 0 ? boss.sprite_left : boss.sprite_right;
+	if(boss.pos.cur.y < exalice_fly_top) {
+		boss.pos.cur.y = exalice_fly_top;
+		boss.flystep_next_y_direction = 2;
+	} else if(boss.pos.cur.y > exalice_fly_bottom) {
+		boss.pos.cur.y = exalice_fly_bottom;
+		boss.flystep_next_y_direction = 1;
+	}
+	if(boss.pos.cur.x < exalice_fly_left) {
+		boss.pos.cur.x = exalice_fly_left;
+	} else if(boss.pos.cur.x > exalice_fly_right) {
+		boss.pos.cur.x = exalice_fly_right;
+	}
+	if(frame < 28) return FlyResult::moving;
+	boss.sprite = boss.sprite_stay;
+	return FlyResult::complete;
+}
+
+[[nodiscard]] static bool extra_hittest(State &state, Presentation &presentation) noexcept
+{
+	if(state.bombing) state.extra.invincibility_frames = 39U;
+	if(state.extra.invincibility_frames != 0U) return false;
+	return boss_hittest(state, presentation);
+}
+
+[[nodiscard]] static bool extra_phase_next(
+	State &state, Presentation &presentation, std::uint8_t explosion_type, std::int16_t next_end_hp
+) noexcept
+{
+	boss_explode_small(state, presentation, explosion_type);
+	if(!state.boss.phase_timed_out) {
+		state.bullets.zap.start();
+		state.bullets.zap_drop_point_items = true;
+		if(!boss_items_drop(state, presentation)) return false;
+	}
+	++state.boss.phase;
+	state.boss.phase_timed_out = true;
+	state.boss.phase_frame = 0;
+	state.boss.mode = 0U;
+	state.boss.phase_state = 0U;
+	state.boss.hp = state.boss.phase_end_hp;
+	state.boss.phase_end_hp = next_end_hp;
+	return true;
+}
+
+[[nodiscard]] static ExtraPatternResult extra_pattern_random_red_spreads(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &bullet = state.bullets.bullet_template;
+	const auto speed = pc98::th0405::randring_next16_and(state.random, 0x1FU);
+	const auto angle = pc98::th0405::randring_next16_and(state.random, 0x7FU);
+	if(!speed || !angle) return ExtraPatternResult::unsupported;
+	bullet.spawn_type = bullet_spawn_type_no_decelerate;
+	bullet.speed = static_cast<std::uint8_t>(*speed + 40U);
+	bullet.angle = byte_add(static_cast<std::uint8_t>(*angle & 0xF8U), -0x40);
+	bullet.group = static_cast<std::uint8_t>(BulletGroup::spread_aimed);
+	bullet.patnum = pat_bullet16_vector_red;
+	bullet.spread = 5U;
+	bullet.spread_angle_delta = 12U;
+	if(!bullets_add_regular(state)) return ExtraPatternResult::unsupported;
+	if((state.boss.phase_frame % 4) == 0) presentation.sound(3U);
+	return state.boss.phase_frame == 128 ? ExtraPatternResult::completed : ExtraPatternResult::running;
+}
+
+[[nodiscard]] static ExtraPatternResult extra_pattern_rotating_red_rings(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	if(boss.phase_frame == 64) boss.statebytes[15U] = static_cast<std::uint8_t>(1U - boss.statebytes[15U]);
+	if((boss.phase_frame % 4) == 0) {
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_backwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.speed = 64U;
+		bullet.angle = byte_add(bullet.angle, boss.statebytes[15U] != 0U ? 2 : -2);
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::ring);
+		bullet.special_motion = static_cast<std::uint8_t>(
+			BulletSpecialMotion::decelerate_then_turn_aimed
+		);
+		state.bullets.special_turns_max = 1U;
+		bullet.spread = 12U;
+		bullet.spread_angle_delta = 10U;
+		bullet.patnum = pat_bullet16_ball_red;
+		if((boss.phase_frame % 8) == 0) {
+			if(!bullets_add_regular(state)) return ExtraPatternResult::unsupported;
+		} else {
+			bullet.spread = 8U;
+			bullet.patnum = pat_bullet16_vector_red;
+			if(!bullets_add_special(state)) return ExtraPatternResult::unsupported;
+		}
+		presentation.sound(3U);
+	}
+	const auto flight = extra_flystep_random(state, static_cast<std::int16_t>(boss.phase_frame - 100));
+	if(flight == FlyResult::unsupported) return ExtraPatternResult::unsupported;
+	return boss.phase_frame == 128 ? ExtraPatternResult::completed : ExtraPatternResult::running;
+}
+
+[[nodiscard]] static ExtraPatternResult extra_pattern_spreads_and_firewaves(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	if(boss.phase_frame == 64) {
+		boss.statebytes[14U] = 0x40U;
+		boss.statebytes[13U] = 0U;
+		state.bullets.pellet_bottom_color = 7U;
+	}
+	if((boss.phase_frame % 2) == 0) {
+		if((boss.phase_frame % 4) == 0) {
+			bullet.spawn_type = bullet_spawn_type_no_decelerate;
+			bullet.patnum = 0U;
+			bullet.group = static_cast<std::uint8_t>(BulletGroup::spread_aimed);
+			bullet.spread = 5U;
+			bullet.spread_angle_delta = 6U;
+			bullet.speed = 80U;
+			bullet.angle = boss.statebytes[14U];
+			if(!bullets_add_regular(state)) return ExtraPatternResult::unsupported;
+			bullet.angle = static_cast<std::uint8_t>(-bullet.angle);
+			if(!bullets_add_regular(state)) return ExtraPatternResult::unsupported;
+			if(boss.statebytes[13U] == 0U) {
+				boss.statebytes[14U] = byte_add(boss.statebytes[14U], -3);
+				if(boss.statebytes[14U] <= 0x14U) ++boss.statebytes[13U];
+			} else {
+				boss.statebytes[14U] = byte_add(boss.statebytes[14U], 3);
+				if(boss.statebytes[14U] >= 0x40U) --boss.statebytes[13U];
+			}
+			if((boss.phase_frame % 16) == 0) {
+				const auto x = pc98::th0405::randring_next16_mod(state.random, 1536U);
+				const auto y = pc98::th0405::randring_next16_mod(state.random, 1024U);
+				if(!x || !y) return ExtraPatternResult::unsupported;
+				state.extra.random_origin.x = word_add(
+					bullet.origin.x, word_sub(static_cast<std::int16_t>(*x), 768)
+				);
+				state.extra.random_origin.y = word_add(
+					bullet.origin.y, word_sub(static_cast<std::int16_t>(*y), 512)
+				);
+				if(!extra_player_angle(state, state.extra.random_origin, 0, boss.statebytes[15U])) {
+					return ExtraPatternResult::unsupported;
+				}
+			}
+		}
+		bullet.origin = state.extra.random_origin;
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.angle = boss.statebytes[15U];
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::single);
+		bullet.speed = 96U;
+		bullet.patnum = pat_bullet16_vector_red;
+		if(!bullets_add_regular(state)) return ExtraPatternResult::unsupported;
+	}
+	if((boss.phase_frame % 128) == 0) {
+		firewaves_add(state, 128, (boss.phase_frame % 256) == 0);
+		presentation.sound(13U);
+	}
+	if(boss.phase_frame >= 256) {
+		const auto flight = extra_flystep_random(
+			state, static_cast<std::int16_t>((boss.phase_frame & 0x7F) - 96)
+		);
+		if(flight == FlyResult::unsupported) return ExtraPatternResult::unsupported;
+	}
+	return ExtraPatternResult::running;
+}
+
+[[nodiscard]] static ExtraPatternResult extra_pattern_gravity_balls_and_stacks(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	if((boss.phase_frame % 2) == 0) {
+		const auto speed = pc98::th0405::randring_next16_and(state.random, 0x1FU);
+		const auto angle = pc98::th0405::randring_next16_and(state.random, 0x7FU);
+		if(!speed || !angle) return ExtraPatternResult::unsupported;
+		bullet.spawn_type = bullet_spawn_type_no_decelerate;
+		bullet.speed = static_cast<std::uint8_t>(*speed + 12U);
+		bullet.angle = static_cast<std::uint8_t>(*angle + 0x80U);
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::spread);
+		bullet.special_motion = static_cast<std::uint8_t>(BulletSpecialMotion::gravity);
+		state.bullets.special_turns_max = 1U;
+		bullet.patnum = pat_bullet16_small_ball_blue;
+		bullet.spread = 3U;
+		bullet.spread_angle_delta = 12U;
+		if(!bullets_add_special(state)) return ExtraPatternResult::unsupported;
+		if((boss.phase_frame % 4) == 0) {
+			presentation.sound(3U);
+			const auto x = pc98::th0405::randring_next16_mod(state.random, 1536U);
+			const auto y = pc98::th0405::randring_next16_mod(state.random, 1024U);
+			if(!x || !y) return ExtraPatternResult::unsupported;
+			bullet.spawn_type = static_cast<std::uint8_t>(
+				bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+			);
+			bullet.origin.x = word_add(bullet.origin.x, word_sub(static_cast<std::int16_t>(*x), 768));
+			bullet.origin.y = word_add(bullet.origin.y, word_sub(static_cast<std::int16_t>(*y), 512));
+			bullet.patnum = 0U;
+			bullet.group = static_cast<std::uint8_t>(BulletGroup::stack_aimed);
+			bullet.speed = 48U;
+			bullet.stack = 4U;
+			bullet.stack_speed_delta = 6U;
+			bullet.angle = 0U;
+			if(!bullets_add_regular(state)) return ExtraPatternResult::unsupported;
+		}
+	}
+	return boss.phase_frame == 128 ? ExtraPatternResult::completed : ExtraPatternResult::running;
+}
+
+[[nodiscard]] static ExtraPatternResult extra_pattern_rotating_blue_rings(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	if(boss.phase_frame == 64) boss.statebytes[15U] = static_cast<std::uint8_t>(1U - boss.statebytes[15U]);
+	if((boss.phase_frame % 8) == 0) {
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_backwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.speed = 88U;
+		bullet.angle = byte_add(bullet.angle, boss.statebytes[15U] != 0U ? 3 : -3);
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::ring);
+		bullet.spread = 22U;
+		bullet.spread_angle_delta = 8U;
+		bullet.patnum = pat_bullet16_directional_blue;
+		if(!bullets_add_regular(state)) return ExtraPatternResult::unsupported;
+		presentation.sound(3U);
+	}
+	return boss.phase_frame == 128 ? ExtraPatternResult::completed : ExtraPatternResult::running;
+}
+
+[[nodiscard]] static ExtraPatternResult extra_pattern_bouncing_blue_rings(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	if(boss.phase_frame == 64) bullet.spread = 8U;
+	if((boss.phase_frame % 16) == 0) {
+		bullet.patnum = pat_bullet16_directional_blue;
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_backwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.speed = 32U;
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::ring);
+		bullet.special_motion = static_cast<std::uint8_t>(BulletSpecialMotion::bounce_left_right_top);
+		if((boss.phase_frame % 128) == 0 && bullet.spread < 14U) ++bullet.spread;
+		state.bullets.special_turns_max = 1U;
+		bullet.angle = byte_add(bullet.angle, 2);
+		if(!bullets_add_special(state)) return ExtraPatternResult::unsupported;
+		presentation.sound(3U);
+	}
+	return ExtraPatternResult::running;
+}
+
+[[nodiscard]] static ExtraPatternResult extra_pattern_lasers_and_green_rings(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &laser = state.lasers.laser_template;
+	laser.color = 3U;
+	laser.coords.width = 8U;
+	laser.active_at_age = 47;
+	laser.shrink_at_age = 80;
+	const auto cycle_frame = static_cast<std::int16_t>(boss.phase_frame % 16);
+	if(boss.phase_frame < 144) {
+		if(cycle_frame == 0) {
+			if(!extra_player_angle(state, laser.coords.origin, 0x30, laser.coords.angle)) {
+				return ExtraPatternResult::unsupported;
+			}
+			if(!laser_fixed_spawn(state, state.extra.laser_slot++, presentation)) {
+				return ExtraPatternResult::unsupported;
+			}
+			const auto random_angle = pc98::th0405::randring_next16(state.random);
+			if(!random_angle) return ExtraPatternResult::unsupported;
+			auto &bullet = state.bullets.bullet_template;
+			bullet.spawn_type = bullet_spawn_type_no_decelerate;
+			bullet.patnum = pat_bullet16_directional_green;
+			bullet.group = static_cast<std::uint8_t>(BulletGroup::ring);
+			bullet.angle = static_cast<std::uint8_t>(*random_angle);
+			bullet.speed = 64U;
+			bullet.spread = 32U;
+			bullet.spread_angle_delta = 10U;
+			if(!bullets_add_regular(state)) return ExtraPatternResult::unsupported;
+		} else if(cycle_frame == 8) {
+			if(!extra_player_angle(state, laser.coords.origin, -0x30, laser.coords.angle)) {
+				return ExtraPatternResult::unsupported;
+			}
+			if(!laser_fixed_spawn(state, state.extra.laser_slot++, presentation)) {
+				return ExtraPatternResult::unsupported;
+			}
+		}
+	}
+	state.extra.laser_slot &= 0x0FU;
+	for(std::uint8_t slot{}; slot < 16U; ++slot) {
+		if(state.lasers.pool[slot].flag != LaserFlag::fixed_wait_to_grow) continue;
+		state.lasers.pool[slot].coords.angle = byte_add(
+			state.lasers.pool[slot].coords.angle, (slot & 1U) != 0U ? 1 : -1
+		);
+	}
+	if(boss.phase_frame != 208) return ExtraPatternResult::running;
+	state.extra.laser_slot = 0U;
+	return ExtraPatternResult::completed;
+}
+
+[[nodiscard]] static ExtraPatternResult extra_pattern_speedup_spreads(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	if((boss.phase_frame % 2) == 0) {
+		const auto x = pc98::th0405::randring_next16_mod(state.random, 768U);
+		if(!x) return ExtraPatternResult::unsupported;
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::spread_aimed);
+		bullet.special_motion = static_cast<std::uint8_t>(BulletSpecialMotion::speedup);
+		state.bullets.special_turns_max = 2U;
+		bullet.speed = 64U;
+		bullet.spread = 7U;
+		bullet.spread_angle_delta = 9U;
+		bullet.patnum = pat_bullet16_directional_green;
+		bullet.origin.x = word_add(bullet.origin.x, word_sub(static_cast<std::int16_t>(*x), 384));
+		bullet.angle = 0U;
+		if(!bullets_add_special(state)) return ExtraPatternResult::unsupported;
+		presentation.sound(3U);
+	}
+	const auto flight = extra_flystep_random(state, static_cast<std::int16_t>(boss.phase_frame - 100));
+	if(flight == FlyResult::unsupported) return ExtraPatternResult::unsupported;
+	return boss.phase_frame == 128 ? ExtraPatternResult::completed : ExtraPatternResult::running;
+}
+
+[[nodiscard]] static ExtraPatternResult extra_pattern_pingpong_lasers(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &laser = state.lasers.laser_template;
+	if(boss.phase_frame == 64) {
+		laser.color = 2U;
+		laser.coords.width = 6U;
+		laser.coords.angle = 0U;
+		laser.active_at_age = 30;
+		laser.shootout_speed = 88;
+		boss.statebytes[15U] = 0U;
+	}
+	if((boss.phase_frame % 4) == 0) {
+		if(boss.statebytes[15U] == 0U) {
+			laser.coords.angle = byte_add(laser.coords.angle, 8);
+			if(laser.coords.angle >= 128U) boss.statebytes[15U] = 1U;
+			if(!lasers_shootout_add(state, presentation)) return ExtraPatternResult::unsupported;
+		} else if(boss.statebytes[15U] == 1U) {
+			laser.coords.angle = byte_add(laser.coords.angle, -8);
+			if(laser.coords.angle == 0U) boss.statebytes[15U] = 0U;
+			if(!lasers_shootout_add(state, presentation)) return ExtraPatternResult::unsupported;
+		}
+	}
+	if(boss.phase_frame >= 256) {
+		const auto flight = extra_flystep_random(
+			state, static_cast<std::int16_t>((boss.phase_frame & 0x3F) - 32)
+		);
+		if(flight == FlyResult::unsupported) return ExtraPatternResult::unsupported;
+		if(boss.phase_frame >= 512 && (boss.phase_frame % 16) == 0) {
+			auto &bullet = state.bullets.bullet_template;
+			bullet.spawn_type = bullet_spawn_type_no_decelerate;
+			bullet.group = static_cast<std::uint8_t>(BulletGroup::ring_aimed);
+			bullet.angle = 0U;
+			bullet.speed = 64U;
+			bullet.spread = 32U;
+			bullet.spread_angle_delta = 10U;
+			bullet.patnum = pat_bullet16_directional_green;
+			if(!bullets_add_regular(state)) return ExtraPatternResult::unsupported;
+		}
+	}
+	return ExtraPatternResult::running;
+}
+
+[[nodiscard]] static ExtraPatternResult extra_pattern_aimed_crosses(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	if((boss.phase_frame % 16) == 0) {
+		auto &bullet = state.bullets.bullet_template;
+		bullet.speed = 56U;
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::spread_aimed);
+		bullet.patnum = pat_bullet16_cross_blue;
+		bullet.angle = 0U;
+		bullet.spread = 9U;
+		bullet.spread_angle_delta = 15U;
+		if(!bullets_add_regular(state)) return ExtraPatternResult::unsupported;
+		if((boss.phase_frame % 64) == 0) {
+			CheetoTemplate cheeto{};
+			cheeto.color = 11;
+			cheeto.speed = 48U;
+			cheeto.origin = state.boss.pos.cur;
+			if(!extra_player_angle(
+				state, cheeto.origin, (boss.phase_frame % 128) == 0 ? 0x20 : -0x20, cheeto.angle
+			)) return ExtraPatternResult::unsupported;
+			stage6_cheetos_add(state, cheeto);
+			presentation.sound(15U);
+		}
+	}
+	return boss.phase_frame == 256 ? ExtraPatternResult::completed : ExtraPatternResult::running;
+}
+
+[[nodiscard]] static ExtraPatternResult extra_pattern_aimed_cheetos(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	if((boss.phase_frame % 8) == 0) {
+		CheetoTemplate cheeto{};
+		cheeto.color = 11;
+		cheeto.speed = 64U;
+		cheeto.origin = boss.pos.cur;
+		if(!extra_player_angle(
+			state, cheeto.origin, (boss.phase_frame % 16) == 0 ? 0x40 : -0x40, cheeto.angle
+		)) return ExtraPatternResult::unsupported;
+		stage6_cheetos_add(state, cheeto);
+		presentation.sound(15U);
+	}
+	const auto flight = extra_flystep_random(state, static_cast<std::int16_t>(boss.phase_frame % 32));
+	if(flight == FlyResult::unsupported) return ExtraPatternResult::unsupported;
+	return boss.phase_frame == 128 ? ExtraPatternResult::completed : ExtraPatternResult::running;
+}
+
+[[nodiscard]] static ExtraPatternResult extra_pattern_mirrored_crosses(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	auto &gather = state.bullets.gather_template;
+	bullet.origin.y = word_add(bullet.origin.y, 1664);
+	bullet.origin.x = state.extra.pattern_origin_x;
+	gather.center.x = state.extra.pattern_origin_x;
+	if(boss.phase_frame == 64) {
+		// This is a source template write without an immediate cheetos_add().
+		state.b6balls.b6ball_template.angle = static_cast<std::uint8_t>(-0x3C);
+		state.b6balls.b6ball_template.speed = 80U;
+		bullet.angle = 0x20U;
+		bullet.speed = 48U;
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			bullet_spawn_type_cloud_forwards | bullet_spawn_type_no_decelerate
+		);
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::spread);
+		bullet.spread = 3U;
+		bullet.spread_angle_delta = 8U;
+		bullet.patnum = pat_bullet16_cross_blue;
+		boss.statebytes[15U] = 0U;
+		boss.statebytes[14U] = 0U;
+		boss.statebytes[13U] = 0U;
+		presentation.sound(8U);
+	}
+	if(boss.phase_frame < 128) {
+		if((boss.phase_frame % 8) == 0) {
+			gather.color = 14U;
+			gather.center.y = bullet.origin.y;
+			gather.radius = 4096;
+			gather.angle_delta = (boss.phase_frame % 16) == 0 ? 2U : static_cast<std::uint8_t>(-2);
+			gather_add_only(state);
+		}
+		return ExtraPatternResult::running;
+	}
+	if((boss.phase_frame % 2) != 0) return ExtraPatternResult::running;
+	if((boss.phase_frame % 16) == 0) {
+		gather.center.y = bullet.origin.y;
+		gather.radius = 2048;
+		gather.angle_delta = (boss.phase_frame % 32) == 0 ? 2U : static_cast<std::uint8_t>(-2);
+		gather_add_only(state);
+	}
+	bullet.angle = static_cast<std::uint8_t>(0x80U - bullet.angle);
+	if(!bullets_add_regular_fixedspeed(state)) return ExtraPatternResult::unsupported;
+	bullet.angle = static_cast<std::uint8_t>(0x80U - bullet.angle);
+	if(!bullets_add_regular_fixedspeed(state)) return ExtraPatternResult::unsupported;
+	presentation.sound(3U);
+	bullet.angle = byte_add(bullet.angle, -static_cast<std::int16_t>(boss.statebytes[15U]));
+	if((boss.phase_frame % 32) != 0) return ExtraPatternResult::running;
+	boss.statebytes[15U] = byte_add(boss.statebytes[15U], boss.statebytes[14U]);
+	if(boss.statebytes[13U] == 0U) {
+		++boss.statebytes[14U];
+		if(boss.statebytes[14U] >= 0x10U) ++boss.statebytes[13U];
+	} else {
+		--boss.statebytes[14U];
+		if(boss.statebytes[14U] == 0U) {
+			state.extra.pattern_origin_x = state.player_pos.cur.x;
+			return ExtraPatternResult::completed;
+		}
+	}
+	return ExtraPatternResult::running;
+}
+
+[[nodiscard]] static ExtraPatternResult extra_pattern_update(
+	State &state, Presentation &presentation
+) noexcept
+{
+	switch(state.extra.pattern) {
+	case ExtraPattern::random_red_spreads:
+		return extra_pattern_random_red_spreads(state, presentation);
+	case ExtraPattern::rotating_red_rings:
+		return extra_pattern_rotating_red_rings(state, presentation);
+	case ExtraPattern::spreads_and_firewaves:
+		return extra_pattern_spreads_and_firewaves(state, presentation);
+	case ExtraPattern::gravity_balls_and_stacks:
+		return extra_pattern_gravity_balls_and_stacks(state, presentation);
+	case ExtraPattern::rotating_blue_rings:
+		return extra_pattern_rotating_blue_rings(state, presentation);
+	case ExtraPattern::bouncing_blue_rings:
+		return extra_pattern_bouncing_blue_rings(state, presentation);
+	case ExtraPattern::lasers_and_green_rings:
+		return extra_pattern_lasers_and_green_rings(state, presentation);
+	case ExtraPattern::speedup_spreads:
+		return extra_pattern_speedup_spreads(state, presentation);
+	case ExtraPattern::pingpong_lasers:
+		return extra_pattern_pingpong_lasers(state, presentation);
+	case ExtraPattern::aimed_crosses:
+		return extra_pattern_aimed_crosses(state, presentation);
+	case ExtraPattern::aimed_cheetos:
+		return extra_pattern_aimed_cheetos(state, presentation);
+	case ExtraPattern::mirrored_crosses:
+		return extra_pattern_mirrored_crosses(state, presentation);
+	}
+	return ExtraPatternResult::unsupported;
+}
+
+[[nodiscard]] static bool extra_select_alternating_pattern(State &state) noexcept
+{
+	const bool second = (state.boss.phase_state & 1U) != 0U;
+	switch(state.boss.statebytes[9U]) {
+	case 0U:
+		state.extra.pattern = second ? ExtraPattern::rotating_red_rings : ExtraPattern::random_red_spreads;
+		return true;
+	case 1U:
+		state.extra.pattern = second ? ExtraPattern::rotating_blue_rings :
+			ExtraPattern::gravity_balls_and_stacks;
+		return true;
+	case 2U:
+		state.extra.pattern = second ? ExtraPattern::speedup_spreads :
+			ExtraPattern::lasers_and_green_rings;
+		return true;
+	case 3U:
+		state.extra.pattern = second ? ExtraPattern::aimed_cheetos : ExtraPattern::aimed_crosses;
+		return true;
+	default:
+		return false;
+	}
+}
+
+[[nodiscard]] static ExtraPatternResult extra_gather_and_pattern(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	gather_add_only_3stack(state, static_cast<std::int16_t>(boss.phase_frame - 48), 6U, 7U);
+	if(boss.phase_frame == 48) {
+		boss.sprite = 181U;
+		presentation.sound(8U);
+	}
+	if(boss.phase_frame < 64) return ExtraPatternResult::running;
+	const auto result = extra_pattern_update(state, presentation);
+	if(result == ExtraPatternResult::completed) {
+		boss.phase_frame = 0;
+		boss.mode = 0U;
+	}
+	return result;
+}
+
+[[nodiscard]] static bool extra_pattern_phase_next(State &state, Presentation &presentation) noexcept
+{
+	switch(state.boss.statebytes[9U]) {
+	case 0U:
+		if(!extra_phase_next(state, presentation, 0U, 21000)) return false;
+		state.extra.pattern = ExtraPattern::spreads_and_firewaves;
+		return true;
+	case 1U:
+		if(!extra_phase_next(state, presentation, 1U, 15100)) return false;
+		state.extra.pattern = ExtraPattern::bouncing_blue_rings;
+		return true;
+	case 2U:
+		if(!extra_phase_next(state, presentation, 2U, 9600)) return false;
+		state.extra.pattern = ExtraPattern::pingpong_lasers;
+		return true;
+	case 3U:
+		if(!extra_phase_next(state, presentation, 3U, exalice_phase_last_hp)) return false;
+		state.extra.pattern = ExtraPattern::mirrored_crosses;
+		return true;
+	default:
+		return false;
+	}
+}
+
+[[nodiscard]] static bool extra_colored_phase_next(State &state, Presentation &presentation) noexcept
+{
+	switch(state.boss.statebytes[9U]) {
+	case 0U:
+		if(!extra_phase_next(state, presentation, 1U, 18100)) return false;
+		state.extra.pattern = ExtraPattern::gravity_balls_and_stacks;
+		break;
+	case 1U:
+		if(!extra_phase_next(state, presentation, 2U, 12600)) return false;
+		state.extra.pattern = ExtraPattern::lasers_and_green_rings;
+		break;
+	case 2U:
+		if(!extra_phase_next(state, presentation, 3U, 6800)) return false;
+		state.extra.pattern = ExtraPattern::aimed_crosses;
+		break;
+	case 3U:
+		if(!extra_phase_next(state, presentation, 4U, 0)) return false;
+		break;
+	default:
+		return false;
+	}
+	state.bullets.pellet_bottom_color = 9U;
+	state.extra.overlay_patnum = 200U;
+	++state.boss.statebytes[9U];
+	return true;
+}
+
+[[nodiscard]] static bool extra_spreads_and_sweep(State &state, Presentation &presentation) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.bullet_template;
+	gather_add_only_3stack(state, static_cast<std::int16_t>(boss.phase_frame - 64), 6U, 7U);
+	if(boss.phase_frame == 64) {
+		boss.sprite = 181U;
+		presentation.sound(8U);
+		bullet.patnum = pat_bullet16_vector_blue;
+		bullet.group = static_cast<std::uint8_t>(BulletGroup::spread);
+		const auto angle = pc98::th0405::randring_next16(state.random);
+		if(!angle) return false;
+		bullet.angle = static_cast<std::uint8_t>(*angle);
+		bullet.spread = 5U;
+		bullet.spread_angle_delta = 21U;
+		boss.statebytes[15U] = 0U;
+		boss.pos.velocity.x = 0;
+	}
+	if(boss.phase_frame < 128) return true;
+	if((boss.phase_frame % 2) == 0) {
+		const auto damage = static_cast<std::int32_t>(exalice_phase_last_hp - boss.hp);
+		bullet.speed = static_cast<std::uint8_t>((damage * 64) / exalice_phase_last_hp + 40);
+		if(!bullets_add_regular(state)) return false;
+		bullet.angle = byte_add(bullet.angle, 0x80);
+		if(!bullets_add_regular(state)) return false;
+		bullet.angle = byte_add(bullet.angle, 0x87);
+		presentation.sound(9U);
+	}
+	const auto offset = pc98::masterlib::vector2(boss.statebytes[15U], boss.pos.velocity.x);
+	boss.pos.cur.x = word_add(3072, offset.y);
+	boss.statebytes[15U] = byte_add(boss.statebytes[15U], 2);
+	const auto damage = static_cast<std::int32_t>(exalice_phase_last_hp - boss.hp);
+	boss.pos.velocity.x = static_cast<std::int16_t>(
+		(damage * 64 * subpixel_factor) / exalice_phase_last_hp
+	);
+	return true;
+}
+
+[[nodiscard]] static bool extra_alice_update(State &state, Presentation &presentation) noexcept
+{
+	auto &boss = state.boss;
+	if(state.extra.invincibility_frames != 0U) --state.extra.invincibility_frames;
+	state.shots.homing_target = boss.pos.cur;
+	state.bullets.bullet_template.origin = boss.pos.cur;
+	state.bullets.gather_template.center = boss.pos.cur;
+	state.lasers.laser_template.coords.origin = boss.pos.cur;
+	state.b6balls.b6ball_template.origin = boss.pos.cur;
+	++boss.phase_frame;
+
+	switch(boss.phase) {
+	case 0U:
+		if(boss.phase_frame == 1) {
+			boss.hp = exalice_hp_total;
+			boss.phase_end_hp = 23800;
+			state.bullets.gather_template.radius = 2048;
+			state.bullets.gather_template.angle_delta = 2U;
+			state.bullets.gather_template.ring_points = 8;
+			boss.sprite = 180U;
+			boss.sprite_left = 186U;
+			boss.sprite_right = 184U;
+			boss.sprite_stay = 180U;
+			state.extra.invincibility_frames = 0U;
+		}
+		(void)boss_hittest_invincible(state, presentation);
+		if(boss.phase_frame >= 192) {
+			boss.phase_frame = 0;
+			++boss.phase;
+			presentation.sound(13U);
+			state.palette[0U] = {};
+			state.palette_changed = true;
+			state.extra.overlay_patnum = 196U;
+		}
+		break;
+
+	case 1U:
+		(void)boss_hittest_invincible(state, presentation);
+		if(boss.phase_frame >= 64) {
+			++boss.phase;
+			boss.mode = 1U;
+			boss.phase_state = 0U;
+			boss.phase_frame = 0;
+			state.extra.custom_render_active = true;
+			boss.statebytes[15U] = 0U;
+			state.extra.pattern = ExtraPattern::random_red_spreads;
+			boss.statebytes[9U] = 0U;
+		}
+		break;
+
+	case 2U:
+		if(boss.mode == 0U) {
+			const auto flight = extra_flystep_random(
+				state, static_cast<std::int16_t>(boss.phase_frame - 32)
+			);
+			if(flight == FlyResult::unsupported) return false;
+			if(flight == FlyResult::complete) {
+				boss.phase_frame = 0;
+				++boss.phase_state;
+				++boss.mode;
+				if(!extra_select_alternating_pattern(state)) return false;
+				if(boss.phase_state >= 32U) return extra_pattern_phase_next(state, presentation);
+			}
+		} else if(boss.mode == 1U) {
+			const auto result = extra_gather_and_pattern(state, presentation);
+			if(result == ExtraPatternResult::unsupported) return false;
+		}
+		if(!extra_hittest(state, presentation)) break;
+		if(!boss_score_bonus(state, presentation, 20U)) return false;
+		if(!extra_pattern_phase_next(state, presentation)) return false;
+		break;
+
+	case 3U:
+		if(state.palette[0U].r < 96U) {
+			state.palette[0U].r = byte_add(state.palette[0U].r, 2);
+			state.palette_changed = true;
+		}
+		[[fallthrough]];
+	case 7U:
+	case 11U:
+	case 15U:
+		if(boss_flystep_towards(state, 3072, 1024)) {
+			boss.phase_frame = 0;
+			++boss.phase;
+			boss.mode = 1U;
+		}
+		(void)extra_hittest(state, presentation);
+		break;
+
+	case 4U:
+		if(state.palette[0U].r < 96U) {
+			state.palette[0U].r = byte_add(state.palette[0U].r, 2);
+			state.palette_changed = true;
+		}
+		[[fallthrough]];
+	case 8U:
+	case 12U: {
+		const auto result = extra_gather_and_pattern(state, presentation);
+		if(result == ExtraPatternResult::unsupported) return false;
+		if(boss.phase_frame > 4000) return extra_colored_phase_next(state, presentation);
+		if(!extra_hittest(state, presentation)) break;
+		if(!boss_score_bonus(state, presentation, 20U)) return false;
+		if(!extra_colored_phase_next(state, presentation)) return false;
+		break;
+	}
+
+	case 5U:
+	case 6U:
+		if(state.palette[0U].b < 96U) {
+			state.palette[0U].b = byte_add(state.palette[0U].b, 2);
+			state.palette[0U].r = byte_add(state.palette[0U].r, -2);
+			state.palette_changed = true;
+		}
+		if(boss.phase == 5U) {
+			if(boss_flystep_towards(state, 3072, 1024)) {
+				boss.phase_frame = 0;
+				++boss.phase;
+				boss.mode = 1U;
+			}
+			(void)extra_hittest(state, presentation);
+			break;
+		}
+		if(boss.mode == 0U) {
+			const auto flight = extra_flystep_random(
+				state, static_cast<std::int16_t>(boss.phase_frame - 32)
+			);
+			if(flight == FlyResult::unsupported) return false;
+			if(flight == FlyResult::complete) {
+				boss.phase_frame = 0;
+				++boss.phase_state;
+				++boss.mode;
+				if(!extra_select_alternating_pattern(state)) return false;
+				if(boss.phase_state >= 32U) return extra_pattern_phase_next(state, presentation);
+			}
+		} else if(boss.mode == 1U) {
+			const auto result = extra_gather_and_pattern(state, presentation);
+			if(result == ExtraPatternResult::unsupported) return false;
+		}
+		if(!extra_hittest(state, presentation)) break;
+		if(!boss_score_bonus(state, presentation, 20U)) return false;
+		if(!extra_pattern_phase_next(state, presentation)) return false;
+		break;
+
+	case 9U:
+	case 10U:
+		if(state.palette[0U].r < 48U) {
+			state.palette[0U].r = byte_add(state.palette[0U].r, 1);
+			state.palette[0U].b = byte_add(state.palette[0U].b, -1);
+			state.palette_changed = true;
+		}
+		if(boss.phase == 9U) {
+			if(boss_flystep_towards(state, 3072, 1024)) {
+				boss.phase_frame = 0;
+				++boss.phase;
+				boss.mode = 1U;
+			}
+			(void)extra_hittest(state, presentation);
+			break;
+		}
+		if(boss.mode == 0U) {
+			const auto flight = extra_flystep_random(
+				state, static_cast<std::int16_t>(boss.phase_frame - 32)
+			);
+			if(flight == FlyResult::unsupported) return false;
+			if(flight == FlyResult::complete) {
+				boss.phase_frame = 0;
+				++boss.phase_state;
+				++boss.mode;
+				if(!extra_select_alternating_pattern(state)) return false;
+				if(boss.phase_state >= 32U) return extra_pattern_phase_next(state, presentation);
+			}
+		} else if(boss.mode == 1U) {
+			const auto result = extra_gather_and_pattern(state, presentation);
+			if(result == ExtraPatternResult::unsupported) return false;
+		}
+		if(!extra_hittest(state, presentation)) break;
+		if(!boss_score_bonus(state, presentation, 20U)) return false;
+		if(!extra_pattern_phase_next(state, presentation)) return false;
+		break;
+
+	case 13U:
+	case 14U:
+		if(state.palette[0U].g < 64U) {
+			if(state.palette[0U].r > 0U) state.palette[0U].r = byte_add(state.palette[0U].r, -1);
+			state.palette[0U].g = byte_add(state.palette[0U].g, 1);
+			if(state.palette[0U].b > 0U) state.palette[0U].b = byte_add(state.palette[0U].b, -1);
+			state.palette_changed = true;
+		}
+		if(boss.phase == 13U) {
+			if(boss_flystep_towards(state, 3072, 1024)) {
+				boss.phase_frame = 0;
+				++boss.phase;
+				boss.mode = 1U;
+			}
+			(void)extra_hittest(state, presentation);
+			break;
+		}
+		if(boss.mode == 0U) {
+			const auto flight = extra_flystep_random(
+				state, static_cast<std::int16_t>(boss.phase_frame - 32)
+			);
+			if(flight == FlyResult::unsupported) return false;
+			if(flight == FlyResult::complete) {
+				boss.phase_frame = 0;
+				++boss.phase_state;
+				++boss.mode;
+				if(!extra_select_alternating_pattern(state)) return false;
+				if(boss.phase_state >= 32U) return extra_pattern_phase_next(state, presentation);
+			}
+		} else if(boss.mode == 1U) {
+			const auto result = extra_gather_and_pattern(state, presentation);
+			if(result == ExtraPatternResult::unsupported) return false;
+		}
+		if(!extra_hittest(state, presentation)) break;
+		if(!boss_score_bonus(state, presentation, 20U)) return false;
+		if(!extra_pattern_phase_next(state, presentation)) return false;
+		break;
+
+	case 16U: {
+		const auto result = extra_gather_and_pattern(state, presentation);
+		if(result == ExtraPatternResult::unsupported) return false;
+		if(result == ExtraPatternResult::completed) {
+			++boss.phase_state;
+			if(boss.phase_state > 8U) return extra_colored_phase_next(state, presentation);
+		}
+		if(!extra_hittest(state, presentation)) break;
+		if(!boss_score_bonus(state, presentation, 20U)) return false;
+		if(!extra_colored_phase_next(state, presentation)) return false;
+		break;
+	}
+
+	case 17U:
+		if(boss.statebytes[10U] == 0U) {
+			if(state.palette[0U].g == 0U) {
+				boss.statebytes[10U] = 1U;
+			} else {
+				state.palette[0U].g = byte_add(state.palette[0U].g, -1);
+			}
+		} else if(boss.statebytes[10U] == 1U) {
+			state.palette[0U].r = byte_add(state.palette[0U].r, 2);
+			state.palette[0U].g = byte_add(state.palette[0U].g, 1);
+			state.palette[0U].b = byte_add(state.palette[0U].b, 2);
+			if(state.palette[0U].r >= 128U) boss.statebytes[10U] = 2U;
+		} else {
+			state.palette[0U].r = byte_add(state.palette[0U].r, -2);
+			state.palette[0U].g = byte_add(state.palette[0U].g, -1);
+			state.palette[0U].b = byte_add(state.palette[0U].b, -2);
+			if(state.palette[0U].r == 0U) boss.statebytes[10U] = 1U;
+		}
+		state.palette_changed = true;
+		if(!extra_spreads_and_sweep(state, presentation)) return false;
+		if(boss.phase_frame <= 5000) {
+			if(!extra_hittest(state, presentation)) break;
+			boss.phase_state = 1U;
+		}
+		boss_explode_small(state, presentation, 4U);
+		boss.phase_frame = 0;
+		boss.phase = phase_explode_small;
+		state.extra.custom_render_active = false;
+		state.bullets.zap_drop_point_items = false;
+		break;
+
+	default:
+		if(!boss_defeat_update(state, presentation, 200U)) return false;
+		break;
+	}
+	if(!stage6_cheetos_update(state)) return false;
+	firewaves_update(state);
+	presentation.boss_hp(boss.hp, exalice_hp_total);
+	return true;
+}
+
+void extra_fights_setup(State &state) noexcept
+{
+	state.midboss_active = false;
+	state.boss_active = false;
+	// boss_reset() uninstalls bx_custombullets.cpp's renderer.  Firewaves are
+	// separate retained BSS and deliberately survive this callback reset.
+	state.extra.custom_render_active = false;
+	extra_midboss_setup(state);
+	state.boss.phase = 0U;
+	state.boss.mode = 0U;
+	state.boss.phase_state = 0U;
+	state.boss.phase_frame = 0;
+	state.boss.damage_this_frame = 0U;
+	state.boss.phase_timed_out = true;
+	state.boss.pos.cur = {3072, 1024};
+	state.boss.pos.prev = state.boss.pos.cur;
+	state.boss.pos.velocity = {};
+	state.boss.sprite = 180U;
+	state.boss.hitbox_radius = {384, 384};
+	state.boss_explosions.small[0].alive = false;
+	state.boss_explosions.small[1].alive = false;
+}
+
+void extra_boss_activate(State &state) noexcept
+{
+	state.boss_active = true;
+}
+
+bool extra_fights_update(State &state, Presentation &presentation) noexcept
+{
+	if(state.midboss_callback_active && !extra_midboss_update(state, presentation)) return false;
+	if(state.boss_active && !extra_alice_update(state, presentation)) return false;
+	return true;
+}
+
+void extra_fights_render_tail(State &state, Presentation &presentation) noexcept
+{
+	if(state.extra.custom_render_active) firewaves_render_hittest(state);
+	if(state.boss_active && state.boss.phase != phase_explode_big) {
+		state.boss.damage_this_frame = 0U;
+	}
+	if(state.midboss_callback_active) extra_midboss_render_tail(state);
 	fights_render_tail_explosions(state);
 	(void)presentation;
 }

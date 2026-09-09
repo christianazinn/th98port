@@ -44,7 +44,7 @@ try {
 		if (arg == "--help") {
 			std::cout << "TH05 partial headless core (not replay-validated)\n"
 				"--data DIR [--input FILE] [--frames N] [--rank 0..3]\n"
-				"[--character 0..3] [--seed N] [--power 1..128] [--shift] [--stage 1..4]\n"
+				"[--character 0..3] [--seed N] [--power 1..128] [--shift] [--stage 1..7 (7=Extra)]\n"
 				"--demo 0..3 reads DEMO#.REC from DIR with source demo setup.\n"
 				"Input: one original low-byte mask per gameplay tick.\n"
 				"Without --input, ordinary runs use zero input; --demo supplies both source halves.\n"
@@ -81,14 +81,11 @@ try {
 			throw std::runtime_error("--demo cannot be combined with ordinary input settings");
 		}
 	} else if (rank > 3 || character > 3 || power == 0 || power > 128 ||
-		stage < 1 || stage > 4) {
+		stage < 1 || stage > 7) {
 		throw std::runtime_error("Invalid configuration; see --help");
 	}
 	const auto stage_id = static_cast<std::uint8_t>(demo_selected
 		? demo_stages[demo] : (stage - 1U));
-	if (stage_id > 3U) {
-		throw std::runtime_error("This demo targets source stage ID 4, which the headless core does not yet implement");
-	}
 	const auto playchar = static_cast<std::uint8_t>(demo_selected
 		? demo_playchars[demo] : character);
 	const auto demo_num = static_cast<std::uint8_t>(demo_selected ? (demo + 1U) : 0U);

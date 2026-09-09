@@ -201,6 +201,94 @@ struct Stage4State {
 	bool operator==(const Stage4State &) const = default;
 };
 
+// th05/main/midboss/m5_updt.cpp and boss/b5.cpp carry their selected source
+// callbacks in ordinary BSS.  The native state keeps the choices explicit;
+// intervals are written by Stage 5 setup, not by the custom-pool reset.
+enum class Stage5MidbossPattern : std::uint8_t {
+	blue_spreads,
+	random_green_rings,
+	aimed_pellet_stacks,
+};
+enum class Stage5YumekoPattern : std::uint8_t {
+	phase2_sword_fan,
+	phase2_red_ball_ring,
+	phase4_arrowheads_and_sword,
+	phase5_exact_linear_pairs,
+	phase5_green_arrowheads,
+	phase7_arrowheads_laser_swords,
+	phase8_swords_and_spreads,
+	phase10_turning_rings,
+};
+struct Stage5State {
+	Stage5MidbossPattern midboss_pattern{};
+	Stage5YumekoPattern yumeko_pattern{};
+	std::uint8_t interval_phase4{}, interval_phase7{};
+	bool operator==(const Stage5State &) const = default;
+};
+
+// th05/main/boss/b6.cpp's two callback pointers are ordinary BSS, while its
+// laser-delay word and float-direction byte are initialized DATA. None of
+// these are custom-entity storage or reset by stage initialization.
+enum class Stage6Phase23Pattern : std::uint8_t {
+	none,
+	curved_rings,
+	dualspeed_rings,
+	random_directional_and_kunai,
+	dense_blue_stacks,
+};
+enum class Stage6WingPattern : std::uint8_t {
+	none,
+	random_rain_and_spreads,
+	cheetos_within_spread_walls,
+	aimed_b6balls_and_symmetric_spreads,
+	devil,
+};
+struct Stage6State {
+	Stage6Phase23Pattern phase_2_3_pattern{};
+	Stage6WingPattern wing_pattern{};
+	std::uint16_t devil_laser_grow_delay{};
+	bool float_direction{};
+	bool operator==(const Stage6State &) const = default;
+};
+
+// th05/main/boss/bx_updt.cpp's callable pattern table plus the four direct
+// callbacks installed between its pattern groups.  The selector models the
+// source function pointer without inventing a callback framework.
+enum class ExtraPattern : std::uint8_t {
+	random_red_spreads,
+	rotating_red_rings,
+	spreads_and_firewaves,
+	gravity_balls_and_stacks,
+	rotating_blue_rings,
+	bouncing_blue_rings,
+	lasers_and_green_rings,
+	speedup_spreads,
+	pingpong_lasers,
+	aimed_crosses,
+	aimed_cheetos,
+	mirrored_crosses,
+};
+
+// BX_TEXT/BX_UPDATE_TEXT mix BSS callbacks with two initialized DATA words:
+// `pattern_origin_x` starts centered and `laser_slot` starts at zero.  They
+// survive stage initialization; b6balls is the separate custom pool that
+// stores Extra's Cheeto heads.
+struct ExtraState {
+	ExtraPattern pattern{};
+	std::uint8_t invincibility_frames{};
+	std::int16_t pattern_origin_x{3072};
+	BossPoint random_origin{};
+	std::uint8_t laser_slot{};
+	std::uint16_t overlay_patnum{};
+	bool custom_render_active{};
+	bool operator==(const ExtraState &) const = default;
+};
+
+// th04/main/midboss/defeat.cpp's midboss path awards 1280 points per unit,
+// unlike the 1000-point boss helper. Extra's separate midboss owner shares
+// this concrete accounting and its source RNG point-number placement.
+[[nodiscard]] bool midboss_score_bonus(State &, Presentation &, std::uint16_t units) noexcept;
+
 // Stage setup invokes this after its non-combat initialization, preserving the
 // source values for Stage 1's midboss and Sara combat objects.
 void stage1_fights_setup(State &) noexcept;
@@ -240,5 +328,25 @@ void stage4_midboss_activate(State &) noexcept;
 void stage4_boss_activate(State &) noexcept;
 [[nodiscard]] bool stage4_fights_update(State &, Presentation &) noexcept;
 void stage4_fights_render_tail(State &, Presentation &) noexcept;
+
+void stage5_fights_setup(State &) noexcept;
+void stage5_midboss_activate(State &) noexcept;
+void stage5_boss_activate(State &) noexcept;
+[[nodiscard]] bool stage5_fights_update(State &, Presentation &) noexcept;
+void stage5_fights_render_tail(State &, Presentation &) noexcept;
+
+// Stage 6 has no midboss: Shinki owns the entire source fight.
+void stage6_fights_setup(State &) noexcept;
+void stage6_midboss_activate(State &) noexcept;
+void stage6_boss_activate(State &) noexcept;
+[[nodiscard]] bool stage6_fights_update(State &, Presentation &) noexcept;
+void stage6_fights_render_tail(State &, Presentation &) noexcept;
+
+// Extra combines its independently-owned midboss with EX-Alice.  The root
+// stage dispatcher keeps their scripted activation/dialog hand-off separate.
+void extra_fights_setup(State &) noexcept;
+void extra_boss_activate(State &) noexcept;
+[[nodiscard]] bool extra_fights_update(State &, Presentation &) noexcept;
+void extra_fights_render_tail(State &, Presentation &) noexcept;
 
 } // namespace th05::core

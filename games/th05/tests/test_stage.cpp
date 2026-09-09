@@ -67,6 +67,24 @@ int main()
 	if (!stage_fights_setup(s) || s.midboss.frames_until != 3900 || s.midboss.hp != 1100)
 		return EXIT_FAILURE;
 	s.stage_id = 4;
+	stage_init(s, p);
+	if (!stage_fights_setup(s) || s.midboss.frames_until != 4800 || s.midboss.hp != 1550 ||
+		s.stage4.yuki.pos.cur != Point{3072, 1024}) return EXIT_FAILURE;
+	s.stage_id = 5;
+	s.shinki_background.particles[0].age = 17;
+	s.stage6.devil_laser_grow_delay = 23;
+	stage_init(s, p);
+	if (s.shinki_background.particles[0].age != 17 ||
+		s.stage6.devil_laser_grow_delay != 23) return EXIT_FAILURE;
+	if (!stage_fights_setup(s) || s.midboss.frames_until != 30000 ||
+		s.boss.pos.cur != Point{3072, 1024}) return EXIT_FAILURE;
+	s.stage_id = 6;
+	s.extra.pattern_origin_x = 123;
+	stage_init(s, p);
+	if (s.extra.pattern_origin_x != 123) return EXIT_FAILURE;
+	if (!stage_fights_setup(s) || s.midboss.frames_until != 5800 ||
+		s.midboss.hp != 3000) return EXIT_FAILURE;
+	s.stage_id = 7;
 	if (stage_fights_setup(s) || stage_tick(s, 0, false, p) != StageResult::unsupported)
 		return EXIT_FAILURE;
 	return EXIT_SUCCESS;

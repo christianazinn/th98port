@@ -10,6 +10,9 @@ void stage_init(State &s, Presentation &p) noexcept
 	s.slowdown_factor = 1;
 	s.slowdown_caused_by_bullets = false;
 	s.gameover_pending = s.stage_clear_requested = s.dialog_pending = false;
+	// stage_setup calls midboss_reset before the stage-specific setup callback.
+	s.midboss_callback_active = false;
+	s.midboss.hp = 0;
 	s.palette_changed = false;
 	s.bullets.zap.stop();
 	s.bullets.stage_graze = 0;

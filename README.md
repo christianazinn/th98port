@@ -6,9 +6,9 @@ This repository continues the complete history of `libth03`.
 `games/th03/` contains the existing PoDD port, deterministic gameplay core,
 replay verifier, video renderer, and application. `games/th01/` contains the
 early Highly Responsive to Prayers foundations. `games/th02/` contains
-Story of Eastern Wonderland random-ring, player-movement, and score helpers.
-`games/th04/` and `games/th05/` contain movement, random-ring, and distinct
-score/extend helpers; TH04 also has shot update and collision helpers.
+the Story of Eastern Wonderland headless gameplay core and all six stage drivers.
+`games/th04/` contains connected gameplay for all six main stages and Extra.
+`games/th05/` likewise contains connected gameplay for all six main stages and Extra.
 The per-game READMEs describe the implemented boundaries and missing callers.
 A successful build does not claim that TH01, TH02, TH04 or TH05 can run
 or verify replays yet.

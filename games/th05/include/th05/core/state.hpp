@@ -14,6 +14,8 @@
 #include "th05/core/stage_scenery.hpp"
 #include "th05/core/sword.hpp"
 #include "th05/core/b6ball.hpp"
+#include "th05/core/firewave.hpp"
+#include "th05/core/shinki_background.hpp"
 #include "pc98/th0405_sparks.hpp"
 #include <bit>
 
@@ -50,6 +52,11 @@ struct State {
 	BossState boss{};
 	AliceState alice{};
 	Stage4State stage4{};
+	Stage5State stage5{};
+	Stage6State stage6{};
+	ExtraState extra{};
+	FirewaveState firewaves{};
+	ShinkiBackgroundState shinki_background{};
 	SwordState swords{};
 	B6BallState b6balls{};
 	BossExplosionState boss_explosions{};
@@ -59,6 +66,8 @@ struct State {
 	Stage2Scenery stage2_scenery{};
 	std::array<Rgb, 16> palette{};
 	bool midboss_active{}, boss_active{}, stage_clear_requested{}, dialog_pending{};
+	// The installed update survives midboss_active becoming false during defeat.
+	bool midboss_callback_active{};
 	std::int16_t playfield_shake_anim_time{}, playfield_shake_x{}, playfield_shake_y{};
 	std::int8_t playfield_shake_redraw_time{};
 	std::uint8_t shot_hit_spark_parity{};

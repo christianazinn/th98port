@@ -1,11 +1,24 @@
-# TH05 native foundations
+# TH05 headless gameplay core
 
-This is an asset-free, partial core, not a playable game or replay verifier.
-The current connected batch adds owned gameplay State, run-profile setup,
+This is a headless gameplay MVP, not a playable frontend or full replay verifier.
+Building and running unit tests does not require original assets.
+The connected core includes owned gameplay State, run-profile setup,
 player hit/deathbomb/miss flow, item collection/Dream/extends, score transfer,
-four character shot sets and bomb drivers. Stage scheduling and enemies remain
-separate unfinished work; these routines are not a complete game loop.
+four character shot sets and bomb drivers, enemy scripts, bullets/lasers,
+scrolling and all six main-stage bosses plus Extra Alice and its midboss.
+Modal flows remain explicit host boundaries rather than a full-session controller.
 Presentation only receives notifications; it cannot supply gameplay outcomes.
+
+`th05-headless --data DIR --stage 1..7` runs a stage until a pause, dialogue,
+Game Over or clear boundary. Stage 7 selects Extra. Supply extracted ST0n.STD
+and ST0n.MAP (n is the zero-based stage number), and optionally `--input FILE`
+with one low-byte input mask per tick. `--demo 0..3` instead uses the original
+DEMO0.REC through DEMO3.REC profiles. See `--help` for character/rank/seed options.
+
+With tests enabled, `th05-stage-chain DIR 6` exercises all main stages across
+16 character/difficulty profiles, and `th05-stage-chain DIR extra` exercises
+all four Extra characters. The fixture supplies invincibility, held shot and
+dialog acknowledgements; it is not original-game or user-replay validation.
 
 Movement input, word motion updates, and the player boundary clamp are implemented.
 The movement-input source owner is

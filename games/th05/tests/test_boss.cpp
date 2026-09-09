@@ -57,12 +57,12 @@ struct Trace final : Presentation {
 {
 	auto state = source_state();
 	Trace trace{};
-	state.midboss_active = true;
 	state.midboss.phase = 3U;
 	state.midboss.phase_frame = 99;
 	stage1_fights_setup(state);
 	if(
 		state.midboss_active || state.boss_active ||
+		state.midboss.phase != 3U || state.midboss.phase_frame != 99 ||
 		state.midboss.frames_until != 2500U ||
 		state.midboss.pos.cur != Point{3072, 1536} ||
 		state.midboss.hp != 1000 || state.midboss.sprite != 200U ||
