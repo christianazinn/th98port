@@ -15,6 +15,7 @@ using Point = pc98::th0405::SubpixelPoint;
 using Motion = pc98::th0405::Motion;
 
 inline constexpr std::size_t circle_count = 16U;
+inline constexpr std::size_t kurumi_spawnray_count = 6U;
 inline constexpr std::uint8_t circle_free = 0U;
 inline constexpr std::uint8_t circle_alive = 1U;
 inline constexpr std::uint8_t circle_remove = 2U;
@@ -31,6 +32,20 @@ struct Circle {
 struct CircleState {
 	std::array<Circle, circle_count> pool{};
 	bool operator==(const CircleState &) const = default;
+};
+
+// th04/main/boss/b2.cpp. These use the Stage 2 custom-entity pool in the
+// source; only Kurumi owns that pool during the fight.
+enum class KurumiSpawnrayFlag : std::uint8_t {
+	free = 0U,
+	grow = 1U,
+	shrink = 2U,
+};
+
+struct KurumiSpawnray {
+	KurumiSpawnrayFlag flag{KurumiSpawnrayFlag::free};
+	Point target{}, origin{}, velocity{};
+	bool operator==(const KurumiSpawnray &) const = default;
 };
 
 // th04/main/boss/explode.hpp. The source keeps two small explosion slots and
@@ -51,7 +66,7 @@ struct BossExplosionState {
 	bool operator==(const BossExplosionState &) const = default;
 };
 
-// th04/main/midboss/midboss.hpp, with Stage 1's otherwise-private fan byte.
+// th04/main/midboss/midboss.hpp, with both fights' otherwise-private bytes.
 struct MidbossState {
 	Motion pos{};
 	std::uint16_t frames_until{};
@@ -60,6 +75,7 @@ struct MidbossState {
 	std::int16_t phase_frame{};
 	std::uint8_t damage_this_frame{}, angle{};
 	std::uint8_t stage1_fan_angle{};
+	std::uint8_t stage2_pattern{}, stage2_direction{}, stage2_cycles{};
 	bool operator==(const MidbossState &) const = default;
 };
 
@@ -77,6 +93,8 @@ struct BossState {
 	std::int16_t phase_end_hp{};
 	Point hitbox_radius{};
 	bool phase_timed_out{true};
+	std::array<KurumiSpawnray, kurumi_spawnray_count> kurumi_spawnrays{};
+	std::uint8_t stage2_turn_direction{}, stage2_unused{};
 	bool operator==(const BossState &) const = default;
 };
 
@@ -93,10 +111,16 @@ void stage1_boss_activate(State &) noexcept;
 [[nodiscard]] bool stage1_fights_update(State &, Presentation &) noexcept;
 
 // th04/main/stage/loop.cpp updates circles before sparks/player gameplay.
-void stage1_circles_update(State &, Presentation &) noexcept;
+void circles_update(State &, Presentation &) noexcept;
 
 // The explosion age/animation updates belong to boss_fg_render()/midboss_render
 // after bomb processing, rather than to the earlier gameplay update.
 void stage1_fights_render_tail(State &, Presentation &) noexcept;
+
+void stage2_fights_setup(State &) noexcept;
+void stage2_midboss_activate(State &) noexcept;
+void stage2_boss_activate(State &) noexcept;
+[[nodiscard]] bool stage2_fights_update(State &, Presentation &) noexcept;
+void stage2_fights_render_tail(State &, Presentation &) noexcept;
 
 } // namespace th04::core

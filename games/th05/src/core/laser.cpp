@@ -340,6 +340,39 @@ void lasers_render(State &state, Presentation &presentation) noexcept
 	}
 }
 
+bool lasers_shootout_add(State &state, Presentation &presentation) noexcept
+{
+	// th05/main/bullet/laser.cpp truncates playperf_speedtune's result to the
+	// low Q4.4 byte even though Laser::shootout_speed is a word.
+	const auto speed = static_cast<std::int16_t>(detail::bullet_speed_tune(
+		static_cast<std::uint8_t>(state.lasers.laser_template.shootout_speed),
+		state.resources.playperf
+	));
+	for(auto &laser : state.lasers.pool) {
+		if(!is_free(laser.flag)) continue;
+		laser.flag = LaserFlag::shootout;
+		laser.coords.starts_at_distance = laser_distance_min;
+		laser.coords.ends_at_distance = laser_distance_min;
+		laser.age = 0;
+		laser.active_at_age = state.lasers.laser_template.active_at_age;
+		laser.color = state.lasers.laser_template.color;
+		laser.shootout_speed = speed;
+		laser.grow_to_width = 6U;
+		laser.coords.width = 6U;
+		laser.coords.angle = state.lasers.laser_template.coords.angle;
+		const auto origin_offset = pc98::masterlib::vector2(
+			laser.coords.angle, static_cast<std::int16_t>(laser_distance_min / 2)
+		);
+		laser.coords.origin = {
+			word_add(state.lasers.laser_template.coords.origin.x, origin_offset.x),
+			word_add(state.lasers.laser_template.coords.origin.y, origin_offset.y),
+		};
+		presentation.sound(5U);
+		return true;
+	}
+	return true;
+}
+
 bool laser_manual_fixed_spawn(
 	State &state, std::uint8_t slot, Presentation &presentation
 ) noexcept

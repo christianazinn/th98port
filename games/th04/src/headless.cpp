@@ -25,14 +25,14 @@ bool number(std::string_view text, unsigned &value)
 int main(int argc, char **argv)
 try {
 	std::filesystem::path data, input_path;
-	unsigned frames = 10000, rank = 1, character = 0, shot = 0, seed = 318;
+	unsigned frames = 10000, rank = 1, character = 0, shot = 0, seed = 318, stage = 1;
 	bool demo = false;
 	for (int i = 1; i < argc; ++i) {
 		const std::string_view arg = argv[i];
 		if (arg == "--help") {
-			std::cout << "TH04 partial Stage 1 headless core (not replay-validated)\n"
+			std::cout << "TH04 partial headless core (not replay-validated)\n"
 				"--data DIR [--demo2 | --input FILE] [--frames N] [--rank 0..3]\n"
-				"[--character 0..1] [--shot 0..1] [--seed N]\n"
+				"[--character 0..1] [--shot 0..1] [--seed N] [--stage 1..2]\n"
 				"Input: one original low-byte input mask per gameplay tick.\n"
 				"Stops explicitly at pause, dialog, Game Over or stage clear.\n";
 			return 0;
@@ -45,11 +45,12 @@ try {
 		else {
 			unsigned *target = arg == "--frames" ? &frames : arg == "--rank" ? &rank :
 				arg == "--character" ? &character : arg == "--shot" ? &shot :
-				arg == "--seed" ? &seed : nullptr;
+				arg == "--seed" ? &seed : arg == "--stage" ? &stage : nullptr;
 			if (!target || !number(value, *target)) throw std::runtime_error("Invalid option");
 		}
 	}
-	if (data.empty() || rank > 3 || character > 1 || shot > 1 || (demo && !input_path.empty()))
+	if (data.empty() || rank > 3 || character > 1 || shot > 1 || stage < 1 || stage > 2 ||
+		(demo && (!input_path.empty() || stage != 1)))
 		throw std::runtime_error("Invalid configuration; see --help");
 	th04::core::State s;
 	th04::core::Presentation p;
@@ -57,12 +58,14 @@ try {
 		static_cast<std::uint8_t>(demo ? 1 : character),
 		static_cast<std::uint8_t>(demo ? 0 : shot), 3, 3, demo)) return 2;
 	s.random.seed = demo ? 318 : seed;
+	s.stage_id = static_cast<std::uint8_t>(stage - 1);
 	if (demo) s.power = 128;
 	th04::core::stage_init(s, p);
-	if (!th04::core::std_load(s.std_data, read(data / "ST00.STD")) ||
-		!th04::core::map_load(s, read(data / "ST00.MAP")) ||
+	const auto stem = stage == 1 ? "ST00" : "ST01";
+	if (!th04::core::std_load(s.std_data, read(data / (std::string(stem) + ".STD"))) ||
+		!th04::core::map_load(s, read(data / (std::string(stem) + ".MAP"))) ||
 		!th04::core::tiles_fill_initial(s)) throw std::runtime_error("Invalid stage data");
-	th04::core::stage1_fights_setup(s);
+	if (!th04::core::stage_fights_setup(s)) return 2;
 	s.page_back = 1;
 	s.scroll_active = true;
 	const auto inputs = demo ? read(data / "DEMO2.REC") :
@@ -77,7 +80,7 @@ try {
 		if (!demo && !input_path.empty() && ticks >= inputs.size()) { stopped = "input-end"; break; }
 		const auto mask = demo ? inputs[s.stage_frame] : inputs.empty() ? 0 : inputs[ticks];
 		const bool shift = demo && inputs[4000U + s.stage_frame] != 0;
-		result = th04::core::stage1_tick(s, static_cast<std::uint16_t>(mask), shift, p);
+		result = th04::core::stage_tick(s, static_cast<std::uint16_t>(mask), shift, p);
 		if (result != th04::core::StageResult::running) { stopped = "game-boundary"; break; }
 	}
 	constexpr std::array names{"running", "pause", "dialog", "gameover", "cleared", "unsupported"};

@@ -995,7 +995,7 @@ bool stage1_fights_update(State &state, Presentation &presentation) noexcept
 	return true;
 }
 
-void stage1_circles_update(State &state, Presentation &presentation) noexcept
+void circles_update(State &state, Presentation &presentation) noexcept
 {
 	for(auto &circle : state.circles.pool) {
 		if(circle.flag == circle_remove) {
@@ -1038,6 +1038,1024 @@ void stage1_fights_render_tail(State &state, Presentation &presentation) noexcep
 		}
 	}
 	(void)presentation;
+}
+
+namespace {
+
+constexpr std::uint8_t pat_bullet16_outlined_ball_blue = 55U;
+constexpr std::uint8_t pat_bullet16_ball_blue = 57U;
+constexpr std::uint8_t stage2_white = 15U;
+
+void circle_add_growing(State &state, Point center) noexcept
+{
+	circle_add(state, center, 8);
+}
+
+[[nodiscard]] bool midboss_hittest_damage(
+	State &state, Presentation &presentation, std::uint16_t &damage
+) noexcept
+{
+	if(!shots_hit(state, state.midboss.pos.cur, {384, 384}, false, damage)) {
+		return false;
+	}
+	if(damage != 0U) presentation.sound(10U);
+	return true;
+}
+
+[[nodiscard]] bool stage2_midboss_pattern_0(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &midboss = state.midboss;
+	if((midboss.phase_frame % 8) == 0) {
+		presentation.sound(3U);
+		auto &bullet = state.bullets.template_;
+		bullet.angle = byte_add(static_cast<std::uint8_t>(
+			static_cast<unsigned>(midboss.stage2_direction) << 5U
+		), 32);
+		if(((midboss.phase_frame / 8) & 1) != 0) {
+			bullet.spawn_type = static_cast<std::uint8_t>(
+				BulletSpawnType::bullet16_cloud_forwards
+			);
+			bullet.patnum = pat_bullet16_ball_blue;
+			bullet.group = BulletGroup::single;
+			bullet.speed = 42U;
+			if(!bullet_template_tune(state) || !bullets_add(state)) return false;
+			bullet.delta = 15U;
+		} else {
+			bullet.delta = 10U;
+		}
+		bullet.group = BulletGroup::spread;
+		bullet.count = 6U;
+		bullet.speed = 36U;
+		if(!bullet_template_tune(state) || !bullets_add(state)) return false;
+	}
+	if(midboss.phase_frame >= 64) {
+		midboss.phase_frame = 0;
+		midboss.stage2_pattern = 0xFFU;
+	}
+	return true;
+}
+
+[[nodiscard]] bool stage2_midboss_pattern_1(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &midboss = state.midboss;
+	if((midboss.phase_frame % 8) == 0) {
+		presentation.sound(3U);
+		auto &bullet = state.bullets.template_;
+		bullet.angle = byte_add(static_cast<std::uint8_t>(
+			static_cast<unsigned>(midboss.stage2_direction) << 5U
+		), 32);
+		bullet.speed = static_cast<std::uint8_t>((midboss.phase_frame / 2) + 32);
+		bullet.group = BulletGroup::ring;
+		bullet.count = 32U;
+		if(!bullet_template_tune(state) || !bullets_add(state)) return false;
+	}
+	if(midboss.phase_frame >= 32) {
+		midboss.phase_frame = 0;
+		midboss.stage2_pattern = 0xFFU;
+	}
+	return true;
+}
+
+[[nodiscard]] bool stage2_midboss_pattern_2(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &midboss = state.midboss;
+	if((midboss.phase_frame % 4) == 0) {
+		presentation.sound(3U);
+		auto &bullet = state.bullets.template_;
+		bullet.speed = 64U;
+		bullet.group = BulletGroup::single;
+		bullet.angle = byte_add(static_cast<std::uint8_t>(
+			static_cast<unsigned>(midboss.stage2_direction) << 5U
+		), 8);
+		if(!bullet_template_tune(state) || !bullets_add(state)) return false;
+		bullet.angle = byte_add(static_cast<std::uint8_t>(
+			static_cast<unsigned>(midboss.stage2_direction) << 5U
+		), 16);
+		if(!bullets_add(state)) return false;
+		bullet.angle = byte_add(static_cast<std::uint8_t>(
+			static_cast<unsigned>(midboss.stage2_direction) << 5U
+		), 56);
+		if(!bullets_add(state)) return false;
+		bullet.angle = byte_add(static_cast<std::uint8_t>(
+			static_cast<unsigned>(midboss.stage2_direction) << 5U
+		), 48);
+		if(!bullets_add(state)) return false;
+	}
+	if(midboss.phase_frame >= 32) {
+		midboss.phase_frame = 0;
+		midboss.stage2_pattern = 0xFFU;
+	}
+	return true;
+}
+
+[[nodiscard]] bool stage2_midboss_pattern_3(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &midboss = state.midboss;
+	const auto frame = static_cast<std::int16_t>(midboss.phase_frame - 1);
+	auto &bullet = state.bullets.template_;
+	if(frame == 0) {
+		const auto angle = pc98::masterlib::iatan2_source(
+			word_sub(state.player_pos.cur.y, midboss.pos.cur.y),
+			word_sub(state.player_pos.cur.x, midboss.pos.cur.x)
+		);
+		if(!angle) return false;
+		midboss.angle = *angle;
+	}
+	if((frame % 8) == 0) {
+		presentation.sound(3U);
+		bullet.speed = 40U;
+		bullet.group = BulletGroup::spread;
+		bullet.count = 5U;
+		bullet.delta = 16U;
+		bullet.angle = midboss.angle;
+		if(!bullet_template_tune(state) || !bullets_add(state)) return false;
+		bullet.speed = 10U;
+		const auto angle = pc98::masterlib::iatan2_source(
+			word_sub(state.player_pos.cur.y, midboss.pos.cur.y),
+			word_sub(state.player_pos.cur.x, midboss.pos.cur.x)
+		);
+		if(!angle) return false;
+		bullet.angle = *angle;
+		bullet.patnum = pat_bullet16_directional_blue;
+		bullet.group = BulletGroup::single;
+		bullet.special_motion = BulletSpecialMotion::none;
+	}
+	if((frame % 32) >= 24) {
+		bullet.spawn_type = static_cast<std::uint8_t>(
+			BulletSpawnType::bullet16_cloud_forwards
+		);
+		bullet.speed = byte_add(bullet.speed, 10);
+		if(!bullets_add(state, true, false)) return false;
+	}
+	if(frame >= 64) {
+		midboss.phase_frame = 0;
+		midboss.stage2_pattern = 0xFFU;
+	}
+	return true;
+}
+
+[[nodiscard]] bool stage2_midboss_pattern_gap(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &midboss = state.midboss;
+	state.bullets.gather_template.center = midboss.pos.cur;
+	gather_add_only_3stack(
+		state, static_cast<std::int16_t>(midboss.phase_frame - 48), 7U, stage2_white
+	);
+	if(midboss.phase_frame == 1) {
+		state.bullets.gather_template.ring_points = 8;
+		state.bullets.gather_template.radius = 1536;
+		switch(midboss.stage2_direction) {
+		case 1U: {
+			const auto direction = pc98::th0405::randring_next16(state.random);
+			if(!direction) return false;
+			if((*direction & 1U) != 0U) {
+				midboss.sprite = 1U;
+				midboss.stage2_direction = 0U;
+				midboss.pos.velocity.x = -48;
+			} else {
+				midboss.sprite = 2U;
+				midboss.stage2_direction = 2U;
+				midboss.pos.velocity.x = 48;
+			}
+			break;
+		}
+		case 0U:
+			midboss.stage2_direction = 1U;
+			midboss.pos.velocity.x = 48;
+			midboss.sprite = 2U;
+			break;
+		case 2U:
+			midboss.stage2_direction = 1U;
+			midboss.pos.velocity.x = -48;
+			midboss.sprite = 1U;
+			break;
+		default:
+			break;
+		}
+	}
+	if(midboss.phase_frame == 48) {
+		midboss.pos.velocity.x = 0;
+	} else if(midboss.phase_frame == 52) {
+		midboss.phase_frame = 0;
+		if(midboss.stage2_direction == 1U) midboss.sprite = 0U;
+		++midboss.stage2_cycles;
+		midboss.stage2_pattern = static_cast<std::uint8_t>(midboss.stage2_cycles & 3U);
+		if(midboss.stage2_cycles > 16U) return false;
+	}
+	(void)presentation;
+	return true;
+}
+
+[[nodiscard]] bool stage2_midboss_update(State &state, Presentation &presentation) noexcept
+{
+	auto &midboss = state.midboss;
+	state.reimu_a.homing_target = midboss.pos.cur;
+	if(midboss.phase == 0U) {
+		pc98::th0405::update_motion(midboss.pos);
+		++midboss.phase_frame;
+		std::uint16_t ignored_damage{};
+		if(!midboss_hittest_damage(state, presentation, ignored_damage)) return false;
+		if(midboss.phase_frame >= 96) {
+			midboss.phase = 1U;
+			midboss.phase_frame = 0;
+			midboss.pos.velocity = {};
+			midboss.stage2_pattern = 0U;
+			midboss.stage2_direction = 1U;
+			midboss.stage2_cycles = 0U;
+		}
+		return true;
+	}
+	if(midboss.phase == 1U) {
+		pc98::th0405::update_motion(midboss.pos);
+		++midboss.phase_frame;
+		auto &bullet = state.bullets.template_;
+		bullet.spawn_type = static_cast<std::uint8_t>(BulletSpawnType::pellet);
+		bullet.origin = {midboss.pos.cur.x, word_sub(midboss.pos.cur.y, 256)};
+		bool pattern_ok = false;
+		switch(midboss.stage2_pattern) {
+		case 0U: pattern_ok = stage2_midboss_pattern_0(state, presentation); break;
+		case 1U: pattern_ok = stage2_midboss_pattern_1(state, presentation); break;
+		case 2U: pattern_ok = stage2_midboss_pattern_2(state, presentation); break;
+		case 3U: pattern_ok = stage2_midboss_pattern_3(state, presentation); break;
+		case 0xFFU: pattern_ok = stage2_midboss_pattern_gap(state, presentation); break;
+		default: return false;
+		}
+		if(!pattern_ok && midboss.stage2_cycles <= 16U) return false;
+
+		std::uint16_t damage{};
+		if(!midboss_hittest_damage(state, presentation, damage)) return false;
+		if(damage == 0U && midboss.stage2_cycles <= 16U) return true;
+		if(midboss.stage2_cycles <= 16U) {
+			midboss.hp = static_cast<std::int16_t>(
+				static_cast<int>(midboss.hp) - static_cast<int>(damage)
+			);
+			if(midboss.hp > 0) {
+				midboss.damage_this_frame = 1U;
+				presentation.sound(4U);
+				return true;
+			}
+			midboss.damage_this_frame = 1U;
+			state.bullets.zap.set_active(true);
+			const auto units = static_cast<std::uint16_t>(
+				18U - static_cast<std::uint16_t>(midboss.stage2_cycles)
+			);
+			if(!midboss_score_bonus(state, presentation, units)) return false;
+			items_add(state, presentation, midboss.pos.cur, ItemType::bomb);
+			state.playfield_shake_anim_time = 12;
+		}
+		midboss.phase = 2U;
+		midboss.sprite = 0U;
+		midboss.phase_frame = 0;
+		midboss.pos.velocity = {0, -16};
+		if(!pc98::th0405::sparks_add_circle(
+			pc98::th0405::SparkPool{state.sparks, state.spark_ring_offset},
+			midboss.pos.cur, 128, 48U
+		)) return false;
+		presentation.sound(12U);
+		return true;
+	}
+	if(midboss.phase == 2U) {
+		pc98::th0405::update_motion(midboss.pos);
+		++midboss.phase_frame;
+		if(midboss.pos.cur.y <= 0) {
+			++midboss.phase;
+			midboss.hp = 0;
+		}
+		if((state.stage_frame & 15U) == 0U &&
+			!pc98::th0405::sparks_add_circle(
+				pc98::th0405::SparkPool{state.sparks, state.spark_ring_offset},
+				midboss.pos.cur, 128, 16U
+			)) {
+			return false;
+		}
+		return true;
+	}
+	state.midboss_active = false;
+	midboss.hp = 0;
+	return true;
+}
+
+void kurumi_spawnrays_add(State &state, std::int16_t distance_from_center_x,
+	std::uint8_t angle, Presentation &presentation) noexcept
+{
+	for(auto &ray : state.boss.kurumi_spawnrays) {
+		if(ray.flag != KurumiSpawnrayFlag::free) continue;
+		ray.flag = KurumiSpawnrayFlag::grow;
+		ray.target = {
+			word_add(state.boss.pos.cur.x, distance_from_center_x),
+			word_sub(state.boss.pos.cur.y, 160),
+		};
+		ray.origin = ray.target;
+		const auto velocity = pc98::masterlib::vector2(angle, 256);
+		ray.velocity = {velocity.x, velocity.y};
+		presentation.sound(5U);
+		return;
+	}
+}
+
+[[nodiscard]] bool kurumi_spawnrays_update(
+	State &state, Presentation &presentation
+) noexcept
+{
+	bool all_free = true;
+	for(auto &ray : state.boss.kurumi_spawnrays) {
+		if(ray.flag == KurumiSpawnrayFlag::free) continue;
+		all_free = false;
+		if(ray.flag == KurumiSpawnrayFlag::grow) {
+			if(ray.target.x < playfield_width && ray.target.y < playfield_height &&
+				ray.target.x > 0 && ray.target.y > 0) {
+				ray.target.x = word_add(ray.target.x, ray.velocity.x);
+				ray.target.y = word_add(ray.target.y, ray.velocity.y);
+				continue;
+			}
+			auto &bullet = state.bullets.template_;
+			bullet.origin = {
+				word_sub(ray.target.x, ray.velocity.x),
+				word_sub(ray.target.y, ray.velocity.y),
+			};
+			bullet.special_motion = BulletSpecialMotion::speedup;
+			state.bullets.special.value = 1U;
+			bullet.speed = 32U;
+			for(std::uint8_t i = 0U; i < 3U; ++i) {
+				if(!bullets_add(state, false, true)) return false;
+				bullet.speed = byte_add(bullet.speed, 6);
+			}
+			ray.flag = KurumiSpawnrayFlag::shrink;
+			presentation.sound(6U);
+			state.circles_color = 9U;
+			circle_add_growing(state, bullet.origin);
+			continue;
+		}
+		if(ray.flag != KurumiSpawnrayFlag::shrink) return false;
+		if(ray.origin.x >= playfield_width || ray.origin.y >= playfield_height ||
+			ray.origin.x <= 0 || ray.origin.y <= 0) {
+			ray.flag = KurumiSpawnrayFlag::free;
+			continue;
+		}
+		ray.origin.x = word_add(ray.origin.x, ray.velocity.x);
+		ray.origin.y = word_add(ray.origin.y, ray.velocity.y);
+	}
+	return all_free;
+}
+
+void kurumi_circle_position(State &state, bool clockwise) noexcept
+{
+	auto &boss = state.boss;
+	boss.pos.cur.x = word_add(3072, pc98::masterlib::vector_component(
+		1024, pc98::masterlib::cosine8(boss.angle)
+	));
+	boss.pos.cur.y = word_add(1456, pc98::masterlib::vector_component(
+		320, pc98::masterlib::sine8(boss.angle)
+	));
+	boss.angle = byte_add(boss.angle, clockwise ? 1 : -1);
+}
+
+[[nodiscard]] bool kurumi_rays_left(State &state, Presentation &presentation) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.phase_frame == 16) {
+		boss.sprite = 8U;
+	} else if(boss.phase_frame == 48) {
+		circle_add_shrinking(state, {word_sub(boss.pos.cur.x, 192),
+			word_sub(boss.pos.cur.y, 160)});
+		state.circles_color = stage2_white;
+		presentation.sound(8U);
+	} else if(boss.phase_frame == 64) {
+		boss.sprite = 0U;
+		const auto random = pc98::th0405::randring_next16_and(state.random, 15U);
+		if(!random) return false;
+		kurumi_spawnrays_add(state, -192, byte_add(24U, -static_cast<std::int16_t>(*random)), presentation);
+	} else if(boss.phase_frame > 64) {
+		auto &bullet = state.bullets.template_;
+		bullet.spawn_type = static_cast<std::uint8_t>(BulletSpawnType::bullet16);
+		bullet.patnum = pat_bullet16_outlined_ball_blue;
+		bullet.angle = 0U;
+		bullet.group = BulletGroup::ring_aimed;
+		bullet.count = 16U;
+		if(!bullet_template_tune(state)) return false;
+		if(kurumi_spawnrays_update(state, presentation)) {
+			boss.phase_frame = 0;
+			boss.mode = 0U;
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] bool kurumi_rays_right(State &state, Presentation &presentation) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.phase_frame == 16) {
+		boss.sprite = 9U;
+	} else if(boss.phase_frame == 48) {
+		circle_add_shrinking(state, {word_add(boss.pos.cur.x, 192),
+			word_sub(boss.pos.cur.y, 160)});
+		state.circles_color = stage2_white;
+		presentation.sound(8U);
+	} else if(boss.phase_frame == 64) {
+		boss.sprite = 0U;
+		const auto random = pc98::th0405::randring_next16_and(state.random, 15U);
+		if(!random) return false;
+		kurumi_spawnrays_add(state, 192, byte_add(104U, static_cast<std::int16_t>(*random)), presentation);
+	} else if(boss.phase_frame > 64) {
+		auto &bullet = state.bullets.template_;
+		bullet.spawn_type = static_cast<std::uint8_t>(BulletSpawnType::bullet16);
+		bullet.patnum = pat_bullet16_outlined_ball_blue;
+		bullet.angle = 0U;
+		bullet.group = BulletGroup::ring_aimed;
+		bullet.count = 16U;
+		if(!bullet_template_tune(state)) return false;
+		if(kurumi_spawnrays_update(state, presentation)) {
+			boss.phase_frame = 0;
+			boss.mode = 0U;
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] bool kurumi_rays_both(State &state, Presentation &presentation) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.phase_frame == 16) {
+		boss.sprite = 10U;
+	} else if(boss.phase_frame == 48) {
+		circle_add_shrinking(state, {word_add(boss.pos.cur.x, 192), word_sub(boss.pos.cur.y, 160)});
+		circle_add_shrinking(state, {word_sub(boss.pos.cur.x, 192), word_sub(boss.pos.cur.y, 160)});
+		state.circles_color = stage2_white;
+		presentation.sound(8U);
+	} else if(boss.phase_frame == 64) {
+		boss.sprite = 0U;
+		const auto random = pc98::th0405::randring_next16_and(state.random, 15U);
+		if(!random) return false;
+		const auto angle = byte_add(104U, static_cast<std::int16_t>(*random));
+		kurumi_spawnrays_add(state, 192, angle, presentation);
+		kurumi_spawnrays_add(state, -192, byte_add(128U, -static_cast<std::int16_t>(angle)), presentation);
+	} else if(boss.phase_frame > 64) {
+		auto &bullet = state.bullets.template_;
+		bullet.spawn_type = static_cast<std::uint8_t>(BulletSpawnType::bullet16);
+		bullet.patnum = pat_bullet16_outlined_ball_blue;
+		bullet.angle = 0U;
+		bullet.group = BulletGroup::ring_aimed;
+		bullet.count = 8U;
+		if(!bullet_template_tune(state)) return false;
+		if(kurumi_spawnrays_update(state, presentation)) {
+			boss.phase_frame = 0;
+			boss.mode = 0U;
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] bool kurumi_turning_bullets(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	kurumi_circle_position(state, false);
+	boss.sprite = boss.angle > 128U ? 4U : 6U;
+	if((state.stage_frame % 57U) != 0U) return true;
+	auto &bullet = state.bullets.template_;
+	bullet.spawn_type = static_cast<std::uint8_t>(BulletSpawnType::bullet16);
+	bullet.patnum = pat_bullet16_outlined_ball_blue;
+	bullet.origin = boss.pos.cur;
+	bullet.group = BulletGroup::ring_aimed;
+	bullet.count = 16U;
+	bullet.special_motion = BulletSpecialMotion::decelerate_then_turn;
+	bullet.speed = 48U;
+	const auto first_angle = pc98::th0405::randring_next16(state.random);
+	if(!first_angle) return false;
+	bullet.angle = static_cast<std::uint8_t>(*first_angle);
+	state.bullets.special.value = 1U;
+	state.bullets.template_special_angle = (boss.stage2_turn_direction & 1U) != 0U
+		? 64U : static_cast<std::uint8_t>(-64);
+	if(!bullet_template_tune(state) || !bullets_add(state, true, false)) return false;
+	state.bullets.template_special_angle = byte_add(
+		state.bullets.template_special_angle, 128
+	);
+	bullet.speed = 32U;
+	const auto second_angle = pc98::th0405::randring_next16(state.random);
+	if(!second_angle) return false;
+	bullet.angle = static_cast<std::uint8_t>(*second_angle);
+	if(!bullets_add(state, true, false)) return false;
+	++boss.stage2_turn_direction;
+	(void)presentation;
+	return true;
+}
+
+[[nodiscard]] bool kurumi_rays_left_extra(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.phase_frame == 16) {
+		boss.sprite = 8U;
+	} else if(boss.phase_frame == 48) {
+		circle_add_shrinking(state, {word_sub(boss.pos.cur.x, 192),
+			word_sub(boss.pos.cur.y, 160)});
+		state.circles_color = stage2_white;
+		presentation.sound(8U);
+	} else if(boss.phase_frame == 64) {
+		boss.sprite = 0U;
+		kurumi_spawnrays_add(state, -192, 24U, presentation);
+	} else if(boss.phase_frame > 64) {
+		if(boss.phase_frame == 80) {
+			kurumi_spawnrays_add(state, -192, 16U, presentation);
+		} else if(boss.phase_frame == 96) {
+			kurumi_spawnrays_add(state, -192, 8U, presentation);
+		}
+		auto &bullet = state.bullets.template_;
+		bullet.spawn_type = static_cast<std::uint8_t>(BulletSpawnType::bullet16);
+		bullet.patnum = pat_bullet16_outlined_ball_blue;
+		bullet.angle = 0U;
+		bullet.group = BulletGroup::ring_aimed;
+		bullet.count = 12U;
+		if(!bullet_template_tune(state)) return false;
+		if(kurumi_spawnrays_update(state, presentation)) {
+			boss.phase_frame = 0;
+			boss.mode = 0U;
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] bool kurumi_rays_right_extra(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.phase_frame == 16) {
+		boss.sprite = 9U;
+	} else if(boss.phase_frame == 48) {
+		circle_add_shrinking(state, {word_add(boss.pos.cur.x, 192),
+			word_sub(boss.pos.cur.y, 160)});
+		state.circles_color = stage2_white;
+		presentation.sound(8U);
+	} else if(boss.phase_frame == 64) {
+		boss.sprite = 0U;
+		kurumi_spawnrays_add(state, 192, 104U, presentation);
+	} else if(boss.phase_frame > 64) {
+		if(boss.phase_frame == 80) {
+			kurumi_spawnrays_add(state, 192, 112U, presentation);
+		} else if(boss.phase_frame == 96) {
+			kurumi_spawnrays_add(state, 192, 120U, presentation);
+		}
+		auto &bullet = state.bullets.template_;
+		bullet.spawn_type = static_cast<std::uint8_t>(BulletSpawnType::bullet16);
+		bullet.patnum = pat_bullet16_outlined_ball_blue;
+		bullet.angle = 0U;
+		bullet.group = BulletGroup::ring_aimed;
+		bullet.count = 12U;
+		if(!bullet_template_tune(state)) return false;
+		if(kurumi_spawnrays_update(state, presentation)) {
+			boss.phase_frame = 0;
+			boss.mode = 0U;
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] bool kurumi_rays_both_extra(
+	State &state, Presentation &presentation
+) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.phase_frame == 16) {
+		boss.sprite = 10U;
+	} else if(boss.phase_frame == 48) {
+		circle_add_shrinking(state, {word_sub(boss.pos.cur.x, 192),
+			word_sub(boss.pos.cur.y, 160)});
+		circle_add_shrinking(state, {word_add(boss.pos.cur.x, 192),
+			word_sub(boss.pos.cur.y, 160)});
+		state.circles_color = stage2_white;
+		presentation.sound(8U);
+	} else if(boss.phase_frame == 64) {
+		boss.sprite = 0U;
+		kurumi_spawnrays_add(state, -192, 24U, presentation);
+		kurumi_spawnrays_add(state, 192, 104U, presentation);
+	} else if(boss.phase_frame > 64) {
+		if(boss.phase_frame == 80) {
+			kurumi_spawnrays_add(state, -192, 16U, presentation);
+			kurumi_spawnrays_add(state, 192, 112U, presentation);
+		} else if(boss.phase_frame == 96) {
+			kurumi_spawnrays_add(state, -192, 8U, presentation);
+			kurumi_spawnrays_add(state, 192, 120U, presentation);
+		}
+		auto &bullet = state.bullets.template_;
+		bullet.spawn_type = static_cast<std::uint8_t>(BulletSpawnType::bullet16);
+		bullet.patnum = pat_bullet16_outlined_ball_blue;
+		bullet.angle = 0U;
+		bullet.group = BulletGroup::ring_aimed;
+		bullet.count = 6U;
+		if(!bullet_template_tune(state)) return false;
+		if(kurumi_spawnrays_update(state, presentation)) {
+			boss.phase_frame = 0;
+			boss.mode = 0U;
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] bool kurumi_stacks(State &state, Presentation &presentation) noexcept
+{
+	auto &boss = state.boss;
+	auto &bullet = state.bullets.template_;
+	if(boss.phase_frame < 16) return true;
+	if(boss.phase_frame == 16) {
+		const auto right_random = pc98::th0405::randring_next16_and(state.random, 15U);
+		if(!right_random) return false;
+		boss.statebytes[15] = byte_add(224U, -static_cast<std::int16_t>(*right_random));
+		const auto left_random = pc98::th0405::randring_next16_and(state.random, 15U);
+		if(!left_random) return false;
+		boss.statebytes[14] = byte_add(160U, static_cast<std::int16_t>(*left_random));
+		boss.statebytes[13] = 0U;
+		bullet.patnum = pat_bullet16_directional_blue;
+	}
+	if((boss.phase_frame % 8) == 0) {
+		bullet.speed = 16U;
+		boss.statebytes[15] = byte_add(boss.statebytes[15], 16);
+		boss.statebytes[14] = byte_add(boss.statebytes[14], -16);
+		++boss.statebytes[13];
+		if(boss.statebytes[13] > 10U) {
+			const auto right_random = pc98::th0405::randring_next16_and(state.random, 15U);
+			if(!right_random) return false;
+			boss.statebytes[15] = byte_add(224U, -static_cast<std::int16_t>(*right_random));
+			const auto left_random = pc98::th0405::randring_next16_and(state.random, 15U);
+			if(!left_random) return false;
+			boss.statebytes[14] = byte_add(160U, static_cast<std::int16_t>(*left_random));
+			boss.statebytes[13] = 0U;
+		}
+		presentation.sound(15U);
+	}
+	bullet.spawn_type = static_cast<std::uint8_t>(
+		BulletSpawnType::bullet16_cloud_forwards
+	);
+	bullet.group = BulletGroup::single;
+	bullet.origin.y = word_sub(boss.pos.cur.y, 160);
+	bullet.origin.x = word_add(boss.pos.cur.x, 192);
+	bullet.angle = boss.statebytes[15];
+	if(!bullets_add(state, false, true)) return false;
+	bullet.origin.x = word_sub(bullet.origin.x, 384);
+	bullet.angle = boss.statebytes[14];
+	if(!bullets_add(state, false, true)) return false;
+	bullet.speed = byte_add(bullet.speed, 10);
+	if(boss.statebytes[0] == 0U || (boss.phase_frame % boss.statebytes[0]) != 0) {
+		return true;
+	}
+	bullet.group = BulletGroup::spread_aimed;
+	bullet.count = 5U;
+	bullet.delta = 9U;
+	bullet.angle = 0U;
+	bullet.spawn_type = static_cast<std::uint8_t>(BulletSpawnType::pellet);
+	const auto speed_random = pc98::th0405::randring_next16_and(state.random, 15U);
+	if(!speed_random) return false;
+	bullet.speed = byte_add(32U, static_cast<std::int16_t>(*speed_random));
+	bullet.special_motion = BulletSpecialMotion::none;
+	return bullet_template_tune(state) && bullets_add(state, true, false);
+}
+
+void kurumi_hover(State &state) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.pos.cur.x < 3056) {
+		boss.pos.velocity.x = 24;
+	} else if(boss.pos.cur.x > 3088) {
+		boss.pos.velocity.x = -24;
+	}
+	if(boss.pos.cur.y < 1264) {
+		boss.pos.velocity.y = 12;
+	} else if(boss.pos.cur.y > 1296) {
+		boss.pos.velocity.y = -12;
+	}
+	pc98::th0405::update_motion(boss.pos);
+}
+
+[[nodiscard]] bool kurumi_update(State &state, Presentation &presentation) noexcept
+{
+	auto &boss = state.boss;
+	state.bullets.gather_template.center = boss.pos.cur;
+	switch(boss.phase) {
+	case 0U:
+		if(boss.phase_frame == 0) {
+			boss.hp = 4800;
+			boss.phase_end_hp = 4800;
+			state.palette[0] = {96U, 0U, 0U};
+			state.palette_changed = true;
+			for(auto &ray : boss.kurumi_spawnrays) ray.flag = KurumiSpawnrayFlag::free;
+			state.bullets.gather_template.center = boss.pos.cur;
+			state.bullets.gather_template.ring_points = 32;
+			state.bullets.gather_template.radius = 5120;
+			state.bullets.gather_template.angle_delta = static_cast<std::uint8_t>(-3);
+			state.bullets.gather_template.col = stage2_white;
+		} else if(boss.phase_frame >= 288) {
+			if(boss.phase_frame == 296) state.bullets.gather_template.col = 9U;
+			if((boss.phase_frame & 7) == 0) gather_add_only(state);
+			if(boss.phase_frame >= 320) {
+				++boss.phase;
+				boss.phase_frame = 0;
+				presentation.sound(13U);
+				boss.stage2_unused = 0U;
+			}
+		} else if(boss.phase_frame == 128) {
+			presentation.sound(8U);
+		}
+		++boss.phase_frame;
+		if(!boss_hittest_invincible(state, presentation, boss.hitbox_radius)) return false;
+		break;
+
+	case 1U:
+		++boss.phase_frame;
+		if(!boss_hittest_invincible(state, presentation, boss.hitbox_radius)) return false;
+		if(boss.phase_frame >= 32 &&
+			!boss_phase_next(state, presentation, 0U, 3300)) return false;
+		if(boss.phase == 2U) {
+			boss.mode = 3U;
+			boss.angle = 192U;
+			presentation.sound(6U);
+		}
+		break;
+
+	case 2U: {
+		switch(boss.mode) {
+		case 0U: {
+			kurumi_circle_position(state, true);
+			if(boss.phase_frame >= 96) {
+				boss.phase_frame = 0;
+				const auto next_mode = pc98::th0405::randring_next16_and(state.random, 3U);
+				if(!next_mode) return false;
+				boss.mode = static_cast<std::uint8_t>(*next_mode + 1U);
+				++boss.phase_state;
+				if(boss.phase_state > 10U) {
+					if(!boss_score_bonus(state, presentation, 10U) ||
+						!boss_phase_next(state, presentation, 1U, 2050)) return false;
+					state.bullets.template_special_angle = 64U;
+					state.reimu_a.homing_target = boss.pos.cur;
+					return true;
+				}
+				auto &bullet = state.bullets.template_;
+				bullet.spawn_type = static_cast<std::uint8_t>(BulletSpawnType::pellet);
+				bullet.origin = boss.pos.cur;
+				bullet.patnum = pat_bullet16_outlined_ball_blue;
+				bullet.group = BulletGroup::ring;
+				bullet.count = 22U;
+				const auto angle = pc98::th0405::randring_next16(state.random);
+				if(!angle) return false;
+				bullet.angle = static_cast<std::uint8_t>(*angle);
+				if(!bullet_template_tune(state)) return false;
+				bullet.speed = 16U;
+				const auto count = boss.phase_state <= 5U ? boss.phase_state : 5U;
+				for(std::uint8_t i = 0U; i < count; ++i) {
+					if(!bullets_add(state, false, true)) return false;
+					bullet.speed = byte_add(bullet.speed, 8);
+					bullet.angle = byte_add(bullet.angle, -3);
+				}
+			}
+			break;
+		}
+		case 1U:
+			if(!kurumi_rays_left(state, presentation)) return false;
+			break;
+		case 2U:
+			if(!kurumi_rays_right(state, presentation)) return false;
+			break;
+		case 3U:
+		case 4U:
+			if(!kurumi_rays_both(state, presentation)) return false;
+			break;
+		default:
+			break;
+		}
+		const auto hit = boss_hittest(state, presentation);
+		if(hit == HitResult::unsupported) return false;
+		if(hit == HitResult::ended) {
+			if(!boss_score_bonus(state, presentation, 10U) ||
+				!boss_phase_next(state, presentation, 1U, 2050)) return false;
+			state.bullets.template_special_angle = 64U;
+		}
+		break;
+	}
+
+	case 3U:
+		(void)kurumi_spawnrays_update(state, presentation);
+		if(boss.mode == 0U) {
+			if(boss.phase_frame >= 128) {
+				boss.phase_frame = 0;
+				boss.mode = 1U;
+			}
+		} else if(boss.mode == 1U && !kurumi_turning_bullets(state, presentation)) {
+			return false;
+		}
+		if(boss.phase_frame <= 2000) {
+			const auto hit = boss_hittest(state, presentation);
+			if(hit == HitResult::unsupported) return false;
+			if(hit == HitResult::none) break;
+			if(!boss_score_bonus(state, presentation, 10U)) return false;
+		}
+		if(!boss_phase_next(state, presentation, 2U, 550)) return false;
+		break;
+
+	case 4U: {
+		if(boss.mode == 0U) {
+			kurumi_circle_position(state, true);
+			if(boss.phase_frame >= 96) {
+				boss.phase_frame = 0;
+				const auto next_mode = pc98::th0405::randring_next16_mod(
+					state.random, 3U
+				);
+				if(!next_mode) return false;
+				boss.mode = static_cast<std::uint8_t>(*next_mode + 1U);
+				++boss.phase_state;
+				if(boss.phase_state > 10U) {
+					if(!boss_score_bonus(state, presentation, 10U) ||
+						!boss_phase_next(state, presentation, 3U, 0)) return false;
+					state.reimu_a.homing_target = boss.pos.cur;
+					return true;
+				}
+				auto &bullet = state.bullets.template_;
+				bullet.spawn_type = static_cast<std::uint8_t>(BulletSpawnType::pellet);
+				bullet.origin = boss.pos.cur;
+				bullet.patnum = pat_bullet16_outlined_ball_blue;
+				bullet.group = BulletGroup::ring;
+				bullet.count = 22U;
+				const auto angle = pc98::th0405::randring_next16(state.random);
+				if(!angle) return false;
+				bullet.angle = static_cast<std::uint8_t>(*angle);
+				if(!bullet_template_tune(state)) return false;
+				bullet.speed = 16U;
+				const auto count = boss.phase_state <= 5U ? boss.phase_state : 5U;
+				for(std::uint8_t i = 0U; i < count; ++i) {
+					if(!bullets_add(state, false, true)) return false;
+					bullet.speed = byte_add(bullet.speed, 8);
+					bullet.angle = byte_add(bullet.angle, 3);
+				}
+			}
+		} else if(boss.mode == 1U) {
+			if(!kurumi_rays_left_extra(state, presentation)) return false;
+		} else if(boss.mode == 2U) {
+			if(!kurumi_rays_right_extra(state, presentation)) return false;
+		} else if(boss.mode == 3U) {
+			if(!kurumi_rays_both_extra(state, presentation)) return false;
+		}
+		const auto hit = boss_hittest(state, presentation);
+		if(hit == HitResult::unsupported) return false;
+		if(hit == HitResult::ended) {
+			if(!boss_score_bonus(state, presentation, 10U) ||
+				!boss_phase_next(state, presentation, 3U, 0)) return false;
+		}
+		break;
+	}
+
+	case 5U:
+		(void)kurumi_spawnrays_update(state, presentation);
+		if(boss.mode == 0U) {
+			if(boss.phase_frame == 144) {
+				circle_add_shrinking(state, boss.pos.cur);
+				state.circles_color = stage2_white;
+			}
+			if(boss.phase_frame > 64) {
+				boss.phase_frame = 0;
+				boss.mode = 1U;
+				boss.sprite = 12U;
+				boss.angle = 128U;
+			}
+			kurumi_hover(state);
+		} else if(boss.mode == 1U) {
+			if(!kurumi_stacks(state, presentation)) return false;
+		}
+		if(const auto hit = boss_hittest(state, presentation);
+			hit == HitResult::unsupported) return false;
+		if(boss.damage_this_frame == 0U && boss.phase_frame < 700) break;
+		++boss.phase;
+		if(!pc98::th0405::sparks_add_circle(
+			pc98::th0405::SparkPool{state.sparks, state.spark_ring_offset},
+			boss.pos.cur, 128, 48U
+		)) return false;
+		boss_explode_small(state, presentation, 4U);
+		boss.phase_state = boss.phase_frame < 600 ? 1U : 0U;
+		boss.phase_frame = 0;
+		break;
+
+	case 6U:
+		(void)kurumi_spawnrays_update(state, presentation);
+		kurumi_hover(state);
+		++boss.phase_frame;
+		if(boss.phase_frame == 16) {
+			boss_explode_small(state, presentation, 4U);
+		} else if(boss.phase_frame == 32) {
+			boss_explode_big(state, presentation, 0U);
+			boss.phase = phase_explode_big;
+			state.bullets.zap.set_active(boss.phase_state != 0U);
+			if(boss.phase_state != 0U && !boss_score_bonus(state, presentation, 20U)) {
+				return false;
+			}
+			boss.sprite = pat_enemy_kill;
+			boss.phase_frame = 0;
+			presentation.sound(12U);
+			state.palette[0].r = 0U;
+			state.palette_changed = true;
+			state.player_invincibility_time = boss_defeat_invincibility_frames;
+		}
+		break;
+
+	case phase_explode_big:
+		if(boss.phase_frame < 12) {
+			state.playfield_shake_x = (state.stage_frame & 1U) == 0U ? -4 : 4;
+			state.playfield_shake_y = (state.stage_frame & 3U) <= 1U ? -4 : 4;
+		}
+		state.bullets.slowdown_factor = 2U;
+		++boss.phase_frame;
+		if((boss.phase_frame % 8) == 0) {
+			++boss.sprite;
+			if(boss.sprite >= static_cast<std::uint8_t>(pat_enemy_kill_last + 1U)) {
+				boss.phase = phase_none;
+				boss.phase_frame = 0;
+				state.bombing_disabled = true;
+			}
+		}
+		return true;
+
+	case phase_none:
+		state.palette_tone = 60U;
+		state.palette_changed = true;
+		state.stage_clear_requested = true;
+		return true;
+
+	default:
+		return false;
+	}
+	state.reimu_a.homing_target = boss.pos.cur;
+	return true;
+}
+
+} // namespace
+
+void stage2_fights_setup(State &state) noexcept
+{
+	state.midboss.frames_until = 2600U;
+	state.midboss.pos.cur = {3072, -512};
+	state.midboss.pos.prev = state.midboss.pos.cur;
+	state.midboss.pos.velocity = {0, 16};
+	state.midboss.hp = 750;
+	state.midboss.sprite = 0U;
+	state.midboss_active = false;
+
+	state.boss_active = false;
+	state.boss.phase = 0U;
+	state.boss.mode = 0U;
+	state.boss.phase_state = 0U;
+	state.boss.phase_frame = 0;
+	state.boss.pos.cur = {3072, 1296};
+	state.boss.pos.prev = state.boss.pos.cur;
+	state.boss.pos.velocity = {};
+	state.boss.damage_this_frame = 0U;
+	state.boss.phase_timed_out = true;
+	state.boss_explosions.small[0].alive = false;
+	state.boss_explosions.small[1].alive = false;
+	state.boss.sprite = 0U;
+	state.boss.hitbox_radius = {384, 384};
+	switch(state.rank) {
+	case 0U: state.boss.statebytes[0] = 255U; break;
+	case 1U: state.boss.statebytes[0] = 128U; break;
+	case 2U: state.boss.statebytes[0] = 32U; break;
+	case 3U: state.boss.statebytes[0] = 8U; break;
+	default: state.boss.statebytes[0] = 8U; break;
+	}
+}
+
+void stage2_midboss_activate(State &state) noexcept
+{
+	if(state.midboss.frames_until != state.stage_frame) return;
+	state.midboss.phase = 0U;
+	state.midboss.phase_frame = 0;
+	state.midboss_active = true;
+}
+
+void stage2_boss_activate(State &state) noexcept
+{
+	state.boss_active = true;
+}
+
+bool stage2_fights_update(State &state, Presentation &presentation) noexcept
+{
+	if(state.midboss_active && !stage2_midboss_update(state, presentation)) return false;
+	if(state.boss_active && !kurumi_update(state, presentation)) return false;
+	return true;
+}
+
+void stage2_fights_render_tail(State &state, Presentation &presentation) noexcept
+{
+	if(state.midboss_active && state.midboss.damage_this_frame != 0U) {
+		state.midboss.damage_this_frame = 0U;
+	}
+	stage1_fights_render_tail(state, presentation);
 }
 
 } // namespace th04::core

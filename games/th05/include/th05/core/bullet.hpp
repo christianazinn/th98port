@@ -32,11 +32,21 @@ enum class BulletGroup : std::uint8_t {
 	forcesingle_aimed = 15U,
 };
 
-// th04/main/bullet/bullet.inc with GAME == 5. This parcel executes the
-// exact-linear case needed by Stage 1; other reached values are explicit
-// source-boundary refusals rather than normalized motion.
+// th04/main/bullet/bullet.inc with GAME == 5. These raw values are shared by
+// all later TH05 patterns; the state byte in BulletState is the separate
+// source [bullet_special] union (turn count or Q4.4 speed delta).
 enum class BulletSpecialMotion : std::uint8_t {
+	decelerate_then_turn_aimed = 1U,
+	decelerate_then_turn = 2U,
+	speedup = 3U,
+	decelerate_to_angle = 4U,
+	bounce_left_right = 5U,
+	bounce_top_bottom = 6U,
+	bounce_left_right_top_bottom = 7U,
+	bounce_left_right_top = 8U,
+	gravity = 9U,
 	exact_linear = 10U,
+	none = 0xFFU,
 };
 
 inline constexpr std::uint8_t bullet_spawn_type_normal = 0U;
@@ -104,6 +114,10 @@ struct BulletState {
 	BulletPool pool{};
 	BulletTemplate bullet_template{};
 	std::uint8_t bullet_template_special_angle{};
+	// th04/main/bullet/update[bss].asm's single raw byte. Turning/bouncing
+	// reads it as [turns_max]; speedup/gravity read the same bits as a Q4.4
+	// unsigned speed delta.
+	std::uint8_t special_turns_max{};
 	BulletZap zap{};
 	bool zap_drop_point_items{};
 	bool group_fixedspeed{};

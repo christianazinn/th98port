@@ -12,6 +12,7 @@ bool gameplay_init(State &s, std::uint8_t rank, std::uint8_t playchar,
 	s.score.score.fill(0);
 	s.power = 1;
 	s.bombs = s.credit_bombs = bombs;
+	s.credit_lives = lives;
 	s.resources.rem_lives = lives;
 	s.rank = demo ? 2 : rank;
 	s.resources.playperf = demo ? 28 : 16;
@@ -40,6 +41,7 @@ void stage_init(State &s, Presentation &p) noexcept
 	s.circles_color = 13;
 	s.shots.shots.fill({});
 	s.enemies.enemies.fill({});
+	s.boss.kurumi_spawnrays.fill({}); // Source custom_entities reset.
 	s.sparks.fill({});
 	s.bullets.pool.fill({});
 	s.circles.pool.fill({});
@@ -75,5 +77,6 @@ void stage_init(State &s, Presentation &p) noexcept
 	}
 	s.spark_ring_offset &= 0xFF00;
 	p.hud(HudField::score);
+	thicklasers_reset(s);
 }
 }

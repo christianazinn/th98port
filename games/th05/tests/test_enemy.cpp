@@ -179,6 +179,21 @@ struct Trace final : Presentation {
 		damage_target.damaged_this_frame && state.score.score_delta == 263U;
 }
 
+[[nodiscard]] bool clip_opcodes_keep_source_order()
+{
+	const auto check = [](std::uint8_t opcode, std::uint8_t expected) noexcept {
+		auto state = source_state();
+		Trace presentation{};
+		state.std_data.data = {opcode, 0x09U, 0U};
+		auto &enemy = state.enemies.enemies[0];
+		enemy.flag = enemy_alive;
+		enemy.script = 0U;
+		return enemies_update(state, presentation) && enemy.clip == expected &&
+			enemy.script_ip == 3U;
+	};
+	return check(0x22U, 0x01U) && check(0x23U, 0x10U) && check(0x24U, 0x11U);
+}
+
 } // namespace
 
 int main()
@@ -188,6 +203,7 @@ int main()
 		script_bullets_subtype_and_random_spawn(),
 		collision_drop_score_sparks_and_dream(),
 		autofire_and_source_byte_damage(),
+		clip_opcodes_keep_source_order(),
 	};
 	for(std::size_t index = 0U; index < checks.size(); ++index) {
 		if(!checks[index]) {

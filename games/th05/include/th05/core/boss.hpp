@@ -17,6 +17,9 @@ using BossMotion = pc98::th0405::Motion;
 // bullet angle, leaving this record's angle under the normal source contract.
 struct MidbossState {
 	BossMotion pos{};
+	// th05_main.asm's Stage 2 scratch point (sppoint_2CE26), retained between
+	// Midboss 2 orbit updates rather than recomputed from the visible motion.
+	BossPoint stage2_center{};
 	std::uint16_t frames_until{};
 	std::int16_t hp{};
 	std::uint8_t sprite{}, phase{};
@@ -25,8 +28,9 @@ struct MidbossState {
 	bool operator==(const MidbossState &) const = default;
 };
 
-// th04/main/boss/boss.hpp. `statebytes` backs Sara's source union directly:
-// phase 2/3 consume bytes 9, 10, and 13..15; phase 4 consumes 13..15.
+// th04/main/boss/boss.hpp. `statebytes` backs each source boss's local state
+// overlay directly: Sara consumes bytes 9, 10, and 13..15; Louise consumes
+// bytes 10, 14, and 15.
 struct BossState {
 	BossMotion pos{};
 	std::int16_t hp{};
@@ -77,5 +81,13 @@ void stage1_boss_activate(State &) noexcept;
 // Foreground boss/midboss work updates the shared explosion records after
 // gameplay. The caller keeps this at the source render-tail position.
 void stage1_fights_render_tail(State &, Presentation &) noexcept;
+
+// Stage 2 setup invokes this after its non-combat initialization. The update
+// covers Midboss 2 and Louise through State's explicit clear/dialog hand-off.
+void stage2_fights_setup(State &) noexcept;
+void stage2_midboss_activate(State &) noexcept;
+void stage2_boss_activate(State &) noexcept;
+[[nodiscard]] bool stage2_fights_update(State &, Presentation &) noexcept;
+void stage2_fights_render_tail(State &, Presentation &) noexcept;
 
 } // namespace th05::core

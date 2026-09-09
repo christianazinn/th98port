@@ -83,6 +83,9 @@ void lasers_render(State &, Presentation &) noexcept;
 // The Stage 1 Sara controls. Invalid host slot values are explicit false
 // results before indexing; occupied/inapplicable source slots are success
 // no-ops after their reached state reads.
+// th05/main/bullet/laser.cpp's forward first-free shootout allocator. A full
+// source pool is a successful no-op after tuning the local speed.
+[[nodiscard]] bool lasers_shootout_add(State &, Presentation &) noexcept;
 [[nodiscard]] bool laser_manual_fixed_spawn(
 	State &, std::uint8_t slot, Presentation &
 ) noexcept;

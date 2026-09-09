@@ -19,6 +19,7 @@ void stage_init(State &s, Presentation &p) noexcept
 	s.lasers.pool.fill({});
 	s.shots.shots.fill({});
 	s.enemies.enemies.fill({});
+	s.stage2_scenery.particles.fill({}); // Source custom_entities reset.
 	s.sparks.fill({});
 	s.bullets.pool.pellets.fill({});
 	s.bullets.pool.bullets16.fill({});

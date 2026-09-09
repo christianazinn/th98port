@@ -30,6 +30,11 @@ constexpr std::int16_t gather_radius_start = 1024;
 constexpr std::int16_t gather_frames = 32;
 constexpr std::uint16_t pat_bullet16_directional = 52U;
 constexpr std::uint16_t pat_bullet16_vector = 84U;
+constexpr std::uint16_t pat_bullet16_directional_blue_last = 67U;
+constexpr std::uint16_t pat_bullet16_directional_green = 68U;
+constexpr std::uint16_t pat_bullet16_directional_green_last = 83U;
+constexpr std::uint16_t pat_bullet16_vector_red_last = 115U;
+constexpr std::uint16_t pat_bullet16_vector_blue = 116U;
 constexpr std::uint16_t pat_bullet_zap_initial = 152U;
 constexpr std::uint16_t pat_bullet_zap_compare = 72U;
 constexpr std::uint16_t pat_decay_pellet = 156U;
@@ -124,6 +129,24 @@ constexpr std::uint16_t pat_decay_bullet16 = 160U;
 	angle = byte_add(angle, 7);
 	if(patnum_base < pat_bullet16_vector) angle = static_cast<std::uint8_t>(angle % 0x80U);
 	return static_cast<std::uint16_t>(patnum_base + (angle >> 3U));
+}
+
+void bullet_update_patnum(Bullet &bullet) noexcept
+{
+	// th04/main/bullet/update.cpp with GAME == 5. Bounces retile every
+	// directional/vector color range from the just-mutated raw angle.
+	if(bullet.patnum < pat_bullet16_directional) return;
+	std::uint16_t patnum_base{};
+	if(bullet.patnum <= pat_bullet16_directional_blue_last) {
+		patnum_base = pat_bullet16_directional;
+	} else if(bullet.patnum <= pat_bullet16_directional_green_last) {
+		patnum_base = pat_bullet16_directional_green;
+	} else if(bullet.patnum <= pat_bullet16_vector_red_last) {
+		patnum_base = pat_bullet16_vector;
+	} else {
+		patnum_base = pat_bullet16_vector_blue;
+	}
+	bullet.patnum = bullet_patnum_for_angle(patnum_base, bullet.angle);
 }
 
 void tune_for_easy(BulletTemplate &bullet_template) noexcept
@@ -499,17 +522,158 @@ velocity:
 	return use_pellets ? spawn_into(bullets.pool.pellets) : spawn_into(bullets.pool.bullets16);
 }
 
-[[nodiscard]] bool update_special_exact_linear(Bullet &bullet) noexcept
+void velocity_set_from_angle_and_speed(Bullet &bullet) noexcept
 {
-	if(bullet.special_motion != static_cast<std::uint8_t>(BulletSpecialMotion::exact_linear)) {
-		return false;
+	const auto velocity = pc98::masterlib::vector2(
+		bullet.angle, static_cast<std::int16_t>(bullet.speed_cur)
+	);
+	bullet.pos.velocity = {velocity.x, velocity.y};
+}
+
+void bullet_turn_x(State &state, Bullet &bullet) noexcept
+{
+	++bullet.u1.value;
+	bullet.angle = static_cast<std::uint8_t>(0x80U - bullet.angle);
+	if(bullet.u1.value >= state.bullets.special_turns_max) {
+		bullet.move_flag = bullet_move_regular;
 	}
-	bullet.distance = word_add(bullet.distance, static_cast<std::int16_t>(bullet.speed_cur));
-	const auto target = pc98::masterlib::vector2(bullet.angle, bullet.distance);
-	const auto target_x = word_add(bullet.origin.x, target.x);
-	const auto target_y = word_add(bullet.origin.y, target.y);
-	bullet.pos.velocity.x = word_sub(target_x, bullet.pos.cur.x);
-	bullet.pos.velocity.y = word_sub(target_y, bullet.pos.cur.y);
+	velocity_set_from_angle_and_speed(bullet);
+	bullet_update_patnum(bullet);
+}
+
+void bullet_turn_y(State &state, Bullet &bullet) noexcept
+{
+	++bullet.u1.value;
+	bullet.angle = static_cast<std::uint8_t>(0U - bullet.angle);
+	if(bullet.u1.value >= state.bullets.special_turns_max) {
+		bullet.move_flag = bullet_move_regular;
+	}
+	velocity_set_from_angle_and_speed(bullet);
+	bullet_update_patnum(bullet);
+}
+
+void bullet_turn_complete(State &state, Bullet &bullet) noexcept
+{
+	bullet_update_patnum(bullet);
+	bullet.speed_cur = bullet.speed_final;
+	if(bullet.u1.value >= state.bullets.special_turns_max) {
+		bullet.move_flag = bullet_move_regular;
+	}
+	velocity_set_from_angle_and_speed(bullet);
+}
+
+[[nodiscard]] bool bullet_update_special(State &state, Bullet &bullet) noexcept
+{
+	switch(static_cast<BulletSpecialMotion>(bullet.special_motion)) {
+	case BulletSpecialMotion::decelerate_then_turn_aimed:
+		if(bullet.speed_cur != 0U) {
+			velocity_set_from_angle_and_speed(bullet);
+			--bullet.speed_cur;
+		} else {
+			++bullet.u1.value;
+			const auto angle = pc98::masterlib::iatan2_source(
+				word_sub(state.player_pos.cur.y, bullet.pos.cur.y),
+				word_sub(state.player_pos.cur.x, bullet.pos.cur.x)
+			);
+			if(!angle) return false;
+			bullet.angle = *angle;
+			bullet_turn_complete(state, bullet);
+		}
+		break;
+
+	case BulletSpecialMotion::decelerate_then_turn:
+		if(bullet.speed_cur != 0U) {
+			velocity_set_from_angle_and_speed(bullet);
+			--bullet.speed_cur;
+		} else {
+			++bullet.u1.value;
+			bullet.angle = byte_add(bullet.angle, bullet.u2.value);
+			bullet_turn_complete(state, bullet);
+		}
+		break;
+
+	case BulletSpecialMotion::speedup:
+		velocity_set_from_angle_and_speed(bullet);
+		bullet.speed_cur = byte_add(bullet.speed_cur, state.bullets.special_turns_max);
+		break;
+
+	case BulletSpecialMotion::decelerate_to_angle:
+		if(bullet.speed_cur != 0U) {
+			velocity_set_from_angle_and_speed(bullet);
+			if(bullet.speed_cur > 1U) {
+				bullet.speed_cur = byte_add(bullet.speed_cur, -2);
+			} else {
+				bullet.speed_cur = 0U;
+			}
+			if(bullet.speed_cur < 32U) {
+				const auto turn = std::bit_cast<std::int8_t>(
+					static_cast<std::uint8_t>(bullet.u2.value - bullet.angle)
+				);
+				bullet.angle = byte_add(
+					bullet.angle, static_cast<int>(turn / 4)
+				);
+			}
+		} else {
+			bullet.angle = bullet.u2.value;
+			bullet.speed_cur = bullet.speed_final;
+			bullet.move_flag = bullet_move_regular;
+			velocity_set_from_angle_and_speed(bullet);
+		}
+		break;
+
+	case BulletSpecialMotion::bounce_left_right:
+		if(bullet.pos.cur.x <= 0 || bullet.pos.cur.x >= playfield_width * 16) {
+			bullet_turn_x(state, bullet);
+		}
+		break;
+
+	case BulletSpecialMotion::bounce_top_bottom:
+		if(bullet.pos.cur.y <= 0 || bullet.pos.cur.y >= playfield_height * 16) {
+			bullet_turn_y(state, bullet);
+		}
+		break;
+
+	case BulletSpecialMotion::bounce_left_right_top_bottom:
+		if(bullet.pos.cur.x <= 0 || bullet.pos.cur.x >= playfield_width * 16) {
+			bullet_turn_x(state, bullet);
+		}
+		if(bullet.pos.cur.y <= 0 || bullet.pos.cur.y >= playfield_height * 16) {
+			bullet_turn_y(state, bullet);
+		}
+		break;
+
+	case BulletSpecialMotion::bounce_left_right_top:
+		if(bullet.pos.cur.x <= 0 || bullet.pos.cur.x >= playfield_width * 16) {
+			bullet_turn_x(state, bullet);
+		}
+		if(bullet.pos.cur.y <= 0) bullet_turn_y(state, bullet);
+		break;
+
+	case BulletSpecialMotion::gravity:
+		if((state.stage_frame & 1U) != 0U) {
+			bullet.pos.velocity.y = word_add(
+				bullet.pos.velocity.y,
+				static_cast<std::int16_t>(state.bullets.special_turns_max)
+			);
+		}
+		break;
+
+	case BulletSpecialMotion::exact_linear: {
+		bullet.distance = word_add(
+			bullet.distance, static_cast<std::int16_t>(bullet.speed_cur)
+		);
+		const auto target = pc98::masterlib::vector2(bullet.angle, bullet.distance);
+		const auto target_x = word_add(bullet.origin.x, target.x);
+		const auto target_y = word_add(bullet.origin.y, target.y);
+		bullet.pos.velocity.x = word_sub(target_x, bullet.pos.cur.x);
+		bullet.pos.velocity.y = word_sub(target_y, bullet.pos.cur.y);
+		break;
+	}
+
+	case BulletSpecialMotion::none:
+	default:
+		break;
+	}
 	return true;
 }
 
@@ -587,7 +751,7 @@ template <typename Pool>
 			}
 		}
 		if(bullet.move_flag == bullet_move_special) {
-			if(!update_special_exact_linear(bullet)) return false;
+			if(!bullet_update_special(state, bullet)) return false;
 		} else if(bullet.move_flag == bullet_move_decelerate) {
 			--bullet.u1.value;
 			bullet.speed_cur = byte_add(bullet.speed_final,

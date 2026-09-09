@@ -55,6 +55,32 @@ struct Trace final : Presentation {
 		laser.age == 4 && trace.sounds == std::vector<std::uint8_t>{5U, 6U};
 }
 
+[[nodiscard]] bool shootout_add_and_full_pool()
+{
+	auto state = source_state();
+	Trace trace{};
+	state.lasers.laser_template.coords.origin = {1700, 1800};
+	state.lasers.laser_template.coords.angle = 0U;
+	state.lasers.laser_template.color = 8U;
+	state.lasers.laser_template.shootout_speed = 32;
+	state.lasers.laser_template.active_at_age = 30;
+	if(!lasers_shootout_add(state, trace)) return false;
+	const auto &laser = state.lasers.pool[0];
+	if(laser.flag != LaserFlag::shootout ||
+		laser.coords.origin != Point{1828, 1800} ||
+		laser.coords.starts_at_distance != laser_distance_min ||
+		laser.coords.ends_at_distance != laser_distance_min || laser.age != 0 ||
+		laser.active_at_age != 30 || laser.color != 8U || laser.shootout_speed != 32 ||
+		laser.grow_to_width != 6U || laser.coords.width != 6U ||
+		trace.sounds != std::vector<std::uint8_t>{5U}) return false;
+	for(auto &occupied : state.lasers.pool) occupied.flag = LaserFlag::fixed_active;
+	const auto before = state.lasers.laser_template;
+	if(!lasers_shootout_add(state, trace) || state.lasers.laser_template != before) {
+		return false;
+	}
+	return trace.sounds == std::vector<std::uint8_t>{5U};
+}
+
 [[nodiscard]] bool collision_gaps_and_clear_decay()
 {
 	auto state = source_state();
@@ -162,6 +188,7 @@ int main()
 		bool (*run)();
 	} tests[] = {
 		{"manual spawn and grow", manual_spawn_and_grow},
+		{"shootout add and full pool", shootout_add_and_full_pool},
 		{"collision gaps and clear decay", collision_gaps_and_clear_decay},
 		{"signed shrink and render invalidation", signed_shrink_and_render_invalidation},
 		{"slot and reached-wrap refusals", slot_refusal_and_reached_wrap_refusal},

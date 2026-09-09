@@ -12,7 +12,7 @@ add_library(th05_core STATIC src/core/player.cpp src/core/item.cpp src/core/scor
 	src/core/shot_patterns.cpp src/core/bomb.cpp src/core/std_load.cpp
 	src/core/std_run.cpp src/core/scroll.cpp src/core/stage_init.cpp
 	src/core/stage.cpp src/core/enemy.cpp src/core/bullet.cpp src/core/laser.cpp
-	src/core/boss.cpp)
+	src/core/boss.cpp src/core/stage_bonus.cpp src/core/stage_scenery.cpp)
 target_include_directories(th05_core PUBLIC include)
 target_link_libraries(th05_core PUBLIC pc98_numeric)
 if(MSVC)
@@ -33,7 +33,7 @@ endif()
 
 if(BUILD_TESTING)
 	add_test(NAME th05-headless-help COMMAND th05-headless --help)
-	foreach(test IN ITEMS gameplay item shot_patterns bomb std scroll stage enemy bullet laser boss)
+	foreach(test IN ITEMS gameplay item shot_patterns bomb std scroll stage enemy bullet laser boss boss2 stage_bonus stage_scenery)
 		string(REPLACE "_" "-" name "${test}")
 		add_executable(th05-${name}-tests tests/test_${test}.cpp)
 		target_link_libraries(th05-${name}-tests PRIVATE th05_core)

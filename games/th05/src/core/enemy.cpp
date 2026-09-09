@@ -509,17 +509,17 @@ enum class ScriptBulletAdd : std::uint8_t { regular, special, regular_fixedspeed
 			break;
 
 		case 0x22U:
-			enemy.clip = static_cast<std::uint8_t>(clip_x | clip_y);
-			script_advance(enemy, 1U);
-			break;
-
-		case 0x23U:
 			enemy.clip = static_cast<std::uint8_t>(enemy.clip | clip_x);
 			script_advance(enemy, 1U);
 			break;
 
-		case 0x24U:
+		case 0x23U:
 			enemy.clip = static_cast<std::uint8_t>(enemy.clip | clip_y);
+			script_advance(enemy, 1U);
+			break;
+
+		case 0x24U:
+			enemy.clip = static_cast<std::uint8_t>(clip_x | clip_y);
 			script_advance(enemy, 1U);
 			break;
 

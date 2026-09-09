@@ -11,12 +11,14 @@
 #include "th05/core/bullet.hpp"
 #include "th05/core/laser.hpp"
 #include "th05/core/enemy.hpp"
+#include "th05/core/stage_scenery.hpp"
 #include "pc98/th0405_sparks.hpp"
 #include <bit>
 
 namespace th05::core {
 using Point = pc98::th0405::SubpixelPoint;
 using RandomState = pc98::th0405::RandomState;
+struct Rgb { std::uint8_t r{}, g{}, b{}; };
 
 // Owned gameplay globals, not an implicit run or stage initializer.
 struct State {
@@ -29,8 +31,9 @@ struct State {
 	bool player_is_hit{}, gameover_pending{};
 	std::int16_t miss_explosion_radius{}, power_overflow{};
 	std::uint8_t miss_explosion_angle{}, power{}, shot_level{}, playchar{};
-	std::uint8_t bombs{}, credit_bombs{}, playperf_min{}, rank{}, stage_id{};
+	std::uint8_t bombs{}, credit_bombs{}, credit_lives{}, playperf_min{}, rank{}, stage_id{};
 	std::uint8_t miss_count{}, bombs_used{};
+	std::uint8_t bonus_previous_miss_count{}, bonus_previous_bombs_used{};
 	std::uint16_t graze_score{}, total_graze{};
 	bool turbo_mode{};
 	ExtendState resources{};
@@ -47,6 +50,8 @@ struct State {
 	BulletState bullets{};
 	LaserState lasers{};
 	EnemyState enemies{};
+	Stage2Scenery stage2_scenery{};
+	std::array<Rgb, 16> palette{};
 	bool midboss_active{}, boss_active{}, stage_clear_requested{}, dialog_pending{};
 	std::int16_t playfield_shake_anim_time{}, playfield_shake_x{}, playfield_shake_y{};
 	std::int8_t playfield_shake_redraw_time{};

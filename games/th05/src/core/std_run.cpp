@@ -14,7 +14,9 @@ bool std_run(State &state, Presentation &) noexcept
 	auto &s = state.std_data;
 	if (!s.active) return true;
 	// TH05 activates the midboss inside the still-installed STD callback.
-	stage1_midboss_activate(state);
+	if (state.stage_id == 0) stage1_midboss_activate(state);
+	else if (state.stage_id == 1) stage2_midboss_activate(state);
+	else return false;
 	if (static_cast<std::size_t>(s.ip) + 1 >= s.data.size()) return false;
 	if (read_word(s.data, s.ip) != state.stage_frame) return true;
 	s.ip = static_cast<std::uint16_t>(s.ip + 2);

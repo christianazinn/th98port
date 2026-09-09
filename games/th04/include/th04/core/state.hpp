@@ -9,6 +9,7 @@
 #include "th04/core/bullet.hpp"
 #include "th04/core/enemy.hpp"
 #include "th04/core/boss.hpp"
+#include "th04/core/thicklaser.hpp"
 #include <array>
 #include <bit>
 #include <vector>
@@ -33,7 +34,7 @@ struct State {
 	bool player_is_hit{}, gameover_pending{};
 	std::int16_t miss_explosion_radius{}, power_overflow{};
 	std::uint8_t miss_explosion_angle{}, power{}, shot_level{}, playchar{}, shottype{};
-	std::uint8_t bombs{}, credit_bombs{}, playperf_min{};
+	std::uint8_t bombs{}, credit_bombs{}, credit_lives{}, playperf_min{}, stage_id{};
 	std::uint8_t miss_count{}, bombs_used{};
 	std::uint16_t stage_frame{};
 	std::uint8_t rank{};
@@ -52,6 +53,7 @@ struct State {
 	std::int16_t scroll_last_delta{};
 	StdState std_data{};
 	BulletState bullets{};
+	ThickLaserState thicklasers{};
 	EnemyState enemies{};
 	std::array<std::uint16_t, 25 * 32> tile_ring{};
 	std::vector<std::uint8_t> map_data{};
@@ -85,6 +87,7 @@ enum class HudField { power, lives, bombs, dream, point_items, graze, score };
 struct Presentation {
 	virtual ~Presentation() = default;
 	virtual void sound(std::uint8_t) noexcept {}
+	virtual void palette_show(std::uint16_t) noexcept {}
 	virtual void hud(HudField) noexcept {}
 	virtual void popup(std::uint8_t) noexcept {}
 	virtual void pointnum(Point, std::uint16_t, bool) noexcept {}
@@ -95,6 +98,7 @@ struct Presentation {
 	virtual void growing_circle(Point) noexcept {}
 	virtual void graph_scroll(std::int16_t) noexcept {}
 	virtual void playfield_shake(Point) noexcept {}
+	virtual void thicklaser_geometry(const ThickLaserGeometry &) noexcept {}
 };
 
 inline void playperf_raise(State &state, std::uint8_t delta) noexcept

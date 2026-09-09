@@ -12,6 +12,7 @@ bool gameplay_init(State &s, std::uint8_t rank, std::uint8_t playchar,
 	s.miss_count = s.bombs_used = 0;
 	s.playchar = playchar;
 	s.bombs = s.credit_bombs = bombs;
+	s.credit_lives = lives;
 	s.resources.rem_lives = lives;
 	s.score.score.fill(0);
 	s.power = s.items.dream = 1;

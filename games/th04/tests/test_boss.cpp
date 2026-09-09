@@ -188,9 +188,9 @@ struct Trace final : Presentation {
 	if(state.midboss.damage_this_frame != 0U || state.boss_explosions.big_frame != 1 ||
 		state.palette_tone != 150U) return false;
 	state.circles.pool[0] = {circle_alive, 16U, 0, 0, 4, 8};
-	stage1_circles_update(state, presentation);
+	circles_update(state, presentation);
 	if(state.circles.pool[0].flag != circle_remove) return false;
-	stage1_circles_update(state, presentation);
+	circles_update(state, presentation);
 	return state.circles.pool[0].flag == circle_free;
 }
 

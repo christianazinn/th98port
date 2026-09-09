@@ -1,6 +1,9 @@
 #include "th05/core/bullet.hpp"
 #include "th05/core/state.hpp"
 
+#include "pc98/masterlib_vector.hpp"
+
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -169,6 +172,147 @@ struct Trace final : Presentation {
 		state.bullets.gathers[3].flag == bullet_free;
 }
 
+[[nodiscard]] bool shared_special_motion_transitions()
+{
+	Trace trace{};
+	{
+		auto state = source_state();
+		auto &bullet = state.bullets.pool.bullets16[219];
+		bullet.flag = bullet_alive;
+		bullet.move_flag = bullet_move_special;
+		bullet.special_motion = static_cast<std::uint8_t>(
+			BulletSpecialMotion::decelerate_then_turn
+		);
+		bullet.pos.cur = {2000, 2000};
+		bullet.speed_cur = 1U;
+		bullet.speed_final = 16U;
+		bullet.angle = 0U;
+		bullet.u2.value = 32U;
+		bullet.patnum = 52U;
+		state.bullets.special_turns_max = 1U;
+		if(!bullets_update(state, trace) || bullet.speed_cur != 0U ||
+			bullet.pos.cur != Point{2001, 2000}) return false;
+		const auto turned = pc98::masterlib::vector2(32U, 16);
+		if(!bullets_update(state, trace) || bullet.u1.value != 1U ||
+			bullet.move_flag != bullet_move_regular || bullet.angle != 32U ||
+			bullet.speed_cur != 16U || bullet.patnum != 56U ||
+			bullet.pos.cur != Point{
+				static_cast<std::int16_t>(2001 + turned.x),
+				static_cast<std::int16_t>(2000 + turned.y)
+			}) return false;
+	}
+	{
+		auto state = source_state();
+		auto &bullet = state.bullets.pool.bullets16[219];
+		bullet.flag = bullet_alive;
+		bullet.move_flag = bullet_move_special;
+		bullet.special_motion = static_cast<std::uint8_t>(
+			BulletSpecialMotion::decelerate_then_turn_aimed
+		);
+		bullet.pos.cur = {2000, 2000};
+		bullet.speed_cur = 0U;
+		bullet.speed_final = 16U;
+		bullet.patnum = 84U;
+		state.player_pos.cur = {2000, 3000};
+		state.bullets.special_turns_max = 1U;
+		const auto aimed = pc98::masterlib::vector2(64U, 16);
+		if(!bullets_update(state, trace) || bullet.u1.value != 1U ||
+			bullet.move_flag != bullet_move_regular || bullet.angle != 64U ||
+			bullet.patnum != 92U || bullet.pos.cur != Point{
+				static_cast<std::int16_t>(2000 + aimed.x),
+				static_cast<std::int16_t>(2000 + aimed.y)
+			}) return false;
+	}
+	{
+		auto state = source_state();
+		auto &speedup = state.bullets.pool.pellets[179];
+		speedup.flag = bullet_alive;
+		speedup.move_flag = bullet_move_special;
+		speedup.special_motion = static_cast<std::uint8_t>(BulletSpecialMotion::speedup);
+		speedup.pos.cur = {2000, 2000};
+		speedup.speed_cur = 16U;
+		state.bullets.special_turns_max = 2U;
+		if(!bullets_update(state, trace) || speedup.speed_cur != 18U ||
+			speedup.pos.cur != Point{2016, 2000}) return false;
+	}
+	{
+		auto state = source_state();
+		auto &decelerate = state.bullets.pool.pellets[179];
+		decelerate.flag = bullet_alive;
+		decelerate.move_flag = bullet_move_special;
+		decelerate.special_motion = static_cast<std::uint8_t>(
+			BulletSpecialMotion::decelerate_to_angle
+		);
+		decelerate.pos.cur = {2000, 2000};
+		decelerate.speed_cur = 33U;
+		decelerate.speed_final = 48U;
+		decelerate.u2.value = 64U;
+		if(!bullets_update(state, trace) || decelerate.speed_cur != 31U ||
+			decelerate.angle != 16U || decelerate.pos.cur != Point{2033, 2000}) {
+			return false;
+		}
+		decelerate.speed_cur = 0U;
+		decelerate.pos.cur = {2000, 2000};
+		const auto target = pc98::masterlib::vector2(64U, 48);
+		if(!bullets_update(state, trace) ||
+			decelerate.move_flag != bullet_move_regular ||
+			decelerate.angle != 64U || decelerate.speed_cur != 48U ||
+			decelerate.pos.cur != Point{
+				static_cast<std::int16_t>(2000 + target.x),
+				static_cast<std::int16_t>(2000 + target.y)
+			}) return false;
+	}
+	{
+		auto state = source_state();
+		auto &bounce = state.bullets.pool.bullets16[219];
+		bounce.flag = bullet_alive;
+		bounce.move_flag = bullet_move_special;
+		bounce.special_motion = static_cast<std::uint8_t>(
+			BulletSpecialMotion::bounce_left_right_top_bottom
+		);
+		bounce.pos.cur = {0, 0};
+		bounce.speed_cur = 16U;
+		bounce.angle = 64U;
+		bounce.patnum = 68U;
+		state.bullets.special_turns_max = 2U;
+		const auto velocity = pc98::masterlib::vector2(192U, 16);
+		if(!bullets_update(state, trace) || bounce.u1.value != 2U ||
+			bounce.move_flag != bullet_move_regular || bounce.angle != 192U ||
+			bounce.patnum != 76U || bounce.pos.cur != Point{velocity.x, velocity.y}) {
+			return false;
+		}
+	}
+	{
+		auto state = source_state();
+		auto &gravity = state.bullets.pool.pellets[179];
+		gravity.flag = bullet_alive;
+		gravity.move_flag = bullet_move_special;
+		gravity.special_motion = static_cast<std::uint8_t>(BulletSpecialMotion::gravity);
+		gravity.pos.cur = {2000, 2000};
+		gravity.pos.velocity = {3, 4};
+		state.stage_frame = 1U;
+		state.bullets.special_turns_max = 1U;
+		if(!bullets_update(state, trace) || gravity.pos.velocity.y != 5 ||
+			gravity.pos.cur != Point{2003, 2005}) return false;
+		state.stage_frame = 2U;
+		if(!bullets_update(state, trace) || gravity.pos.velocity.y != 5 ||
+			gravity.pos.cur != Point{2006, 2010}) return false;
+	}
+	{
+		auto state = source_state();
+		auto &unknown = state.bullets.pool.pellets[179];
+		unknown.flag = bullet_alive;
+		unknown.move_flag = bullet_move_special;
+		unknown.special_motion = 0xEEU;
+		unknown.pos.cur = {2000, 2000};
+		unknown.pos.velocity = {7, -3};
+		if(!bullets_update(state, trace) || unknown.pos.cur != Point{2007, 1997}) {
+			return false;
+		}
+	}
+	return true;
+}
+
 } // namespace
 
 int main()
@@ -182,6 +326,7 @@ int main()
 		{"exact linear and gather release", exact_linear_motion_and_gather_release},
 		{"hit graze and zap side effects", hit_graze_and_zap_side_effects},
 		{"gather only three stack", gather_only_three_stack},
+		{"shared special motion transitions", shared_special_motion_transitions},
 	};
 	for(const auto &test : tests) {
 		if(!test.run()) {

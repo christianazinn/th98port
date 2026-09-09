@@ -17,21 +17,35 @@ int main()
 		s.boss.statebytes[0] != 71 || s.bullets.bullet_template.speed != 23 ||
 		s.items.dream != 77 || s.random.cursor != 0 || s.shot_spawn.shot_time != 0)
 		return EXIT_FAILURE;
-	stage1_fights_setup(s);
+	if (!stage_fights_setup(s)) return EXIT_FAILURE;
 	if (s.midboss.frames_until != 2500 || s.midboss.hp != 1000) return EXIT_FAILURE;
 	s.page_back = 1;
-	if (stage1_tick(s, 0x1000, false, p) != StageResult::pause || s.stage_frame != 0)
+	if (stage_tick(s, 0x1000, false, p) != StageResult::pause || s.stage_frame != 0)
 		return EXIT_FAILURE;
-	if (stage1_tick(s, 0, false, p) != StageResult::dialog || !s.dialog_pending ||
+	if (stage_tick(s, 0, false, p) != StageResult::dialog || !s.dialog_pending ||
 		s.stage_frame != 0 || s.boss_active) return EXIT_FAILURE;
-	if (!stage1_dialog_complete(s) || s.dialog_pending || !s.boss_active ||
-		stage1_dialog_complete(s)) return EXIT_FAILURE;
+	if (!stage_dialog_complete(s) || s.dialog_pending || !s.boss_active ||
+		stage_dialog_complete(s)) return EXIT_FAILURE;
 	s.stage_clear_requested = true;
-	if (stage1_tick(s, 0, false, p) != StageResult::cleared || s.stage_frame != 0)
+	if (stage_tick(s, 0, false, p) != StageResult::cleared || s.stage_frame != 0)
 		return EXIT_FAILURE;
 	s.stage_clear_requested = false;
 	s.gameover_pending = true;
-	if (stage1_tick(s, 0, false, p) != StageResult::gameover || s.stage_frame != 0)
+	if (stage_tick(s, 0, false, p) != StageResult::gameover || s.stage_frame != 0)
+		return EXIT_FAILURE;
+	s.stage_id = 1;
+	s.stage2_scenery.particles[0].flag = 1;
+	s.stage2_scenery.flash_tone = 32;
+	s.bonus_previous_miss_count = 2;
+	s.bonus_previous_bombs_used = 3;
+	stage_init(s, p);
+	if (s.stage2_scenery.particles[0].flag != 0 ||
+		s.stage2_scenery.flash_tone != 32 || s.bonus_previous_miss_count != 2 ||
+		s.bonus_previous_bombs_used != 3) return EXIT_FAILURE;
+	if (!stage_fights_setup(s) || s.midboss.frames_until != 2750 || s.midboss.hp != 1400)
+		return EXIT_FAILURE;
+	s.stage_id = 2;
+	if (stage_fights_setup(s) || stage_tick(s, 0, false, p) != StageResult::unsupported)
 		return EXIT_FAILURE;
 	return EXIT_SUCCESS;
 }
