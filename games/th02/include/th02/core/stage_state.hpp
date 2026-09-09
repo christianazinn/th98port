@@ -103,7 +103,7 @@ struct StageState {
 	std::int8_t rank{};
 	std::int16_t playperf_max{};
 	std::uint8_t shottype{};
-	std::uint8_t bomb_damage_frame_mask{};
+	std::uint8_t bomb_damage_frame_mask{1};
 	bool reduce_effects{};
 	bool quit{};
 	// This is the stage-loop's raw bool16, distinct from Midboss1State::active.

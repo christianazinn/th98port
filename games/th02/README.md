@@ -8,6 +8,16 @@ adapter,
 and actual graphics/audio output are still separate dependencies. Community
 replay validation is pending recordings.
 
+`th02-headless` runs Stage 1 from extracted original assets and raw
+little-endian uint16 input masks. Use `--help` for the file list and startup
+options. It executes gameplay without audio/rasterization and stops explicitly
+at pause, boss intro, ending, game over or input exhaustion; it does not infer
+UI decisions from gameplay input or claim to verify public replays.
+
+The MAP and BFNT metrics readers live under `formats/stage_assets.hpp`.
+They supply actual tile sections and enemy dimensions, not guessed values.
+Original files must remain outside the repository.
+
 The implementation notes below record successive slices; their original
 scope limitations describe those individual slices, not the current driver.
 

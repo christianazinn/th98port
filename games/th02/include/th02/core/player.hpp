@@ -66,8 +66,8 @@ struct PlayerShotStreamState {
 	std::uint8_t stream_a_cooldown{};
 	std::uint8_t stream_b_cooldown{};
 	std::uint8_t shot_level{};
-	std::uint8_t shot_patnum{};
-	std::uint8_t shot_option_patnum{};
+	std::uint8_t shot_patnum{0x40};
+	std::uint8_t shot_option_patnum{0x4C};
 	std::uint8_t shot_patnum_powered{};
 	std::uint8_t shot_option_patnum_powered{};
 	std::int8_t spread_angle_delta{};
