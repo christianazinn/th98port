@@ -1,8 +1,14 @@
-# TH02 native foundations
+# TH02 native core (partial)
 
 This is an asset-free, partial deterministic core, not a playable game or a
-replay verifier. It has source-bounded random, player, shot, score, and spark
-state surfaces, including one checked player-frame composition.
+replay verifier. `core/stage1_run.hpp` now drives the implemented first-stage
+gameplay passes, pauses at an explicit UI boundary, and executes Rika's intro
+and ending. Asset loading, the replay/demo input adapter, remaining stages,
+and actual graphics/audio output are still separate dependencies. Community
+replay validation is pending recordings.
+
+The implementation notes below record successive slices; their original
+scope limitations describe those individual slices, not the current driver.
 
 Source donor: ReC98 c6c2ee5390012b6a334163716a1703bf2edd0229:
 th02/main/randfill.cpp, th02/math/randring.cpp, th02/math/randring.inc,
