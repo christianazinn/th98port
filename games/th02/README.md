@@ -426,3 +426,12 @@ locking is not applied by the stock entity pass.
 `core/midboss2.hpp` implements Stage 2's midboss with actual chase bullets,
 shot damage and defeat sparks. Its entrance counts one damage per hit frame,
 not per shot, and defeat spark speed retains the source fixed-point units.
+
+`core/stage1_state.hpp` owns the existing components together and constructs
+short-lived pass adapters internally; copying the state cannot leave adapter
+references pointing into its old location. Its defaults do not initialize a
+valid stage. `core/stage1_frame.hpp` implements the post-entity frame tail:
+deferred pause completion, scroll finish, page flip, boss/ending suspension,
+counter advance, periodic rank rise and score transfer. Explicit lifecycle
+continuations are not substitutes for the unported dialogue. The pre-entity
+scroll/spawn schedule and complete stage initialization remain outstanding.
