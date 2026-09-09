@@ -346,7 +346,12 @@ stage scheduling remain separate owners.
 
 `core/enemy_script.hpp` executes one source enemy opcode at a time, using the
 real movement and bullet allocators. Sound/tile requests remain synchronous
-presentation callbacks. The enclosing enemy update loop is not yet provided.
+presentation callbacks. `core/enemy_update.hpp` supplies the enclosing enemy
+loop: it carries the VM return across slots, clips, animates, targets homing
+shots, and applies real shot collision, damage, item drops, score and Lunatic
+death pellets in source order. Death animation allocates real sparks. A
+caller-supplied opcode budget refuses stalled scripts instead of hanging the
+host or pretending to finish a frame; source prefixes remain visible.
 `core/stage_data.hpp` decodes DT1 template/script/spawn data with explicit
 malformed-input refusals and script lengths; it does not emulate unchecked DOS
 memory accesses or the original allocator. Neither addition is a complete stage
