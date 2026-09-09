@@ -1,10 +1,12 @@
 #include "th02/core/stage1_state.hpp"
+#include <cstdio>
 #include "th02/core/stage1_prepare.hpp"
 #include "th02/core/stage2_prepare.hpp"
 #include "th02/core/stage1_setup.hpp"
 #include "th02/core/stage1_run.hpp"
 #include "th02/core/stage2_run.hpp"
 #include "th02/core/stage3_run.hpp"
+#include "th02/core/stage4_run.hpp"
 
 #include <cstdlib>
 #include <vector>
@@ -14,7 +16,7 @@ namespace {
 using namespace th02::core;
 
 class Trace final : public EnemyUpdateCallbacks, public RikaCallbacks,
-	public MeiraCallbacks, public Midboss2Callbacks, public StonesCallbacks,
+	public MeiraCallbacks, public Midboss2Callbacks, public StonesCallbacks, public MarisaCallbacks,
 	public Midboss1Callbacks, public EnemyInvalidationCallbacks,
 	public PlayerFrameInvalidationCallbacks,
 	public LaserInvalidationCallbacks, public ItemScheduleCallbacks,
@@ -23,7 +25,7 @@ class Trace final : public EnemyUpdateCallbacks, public RikaCallbacks,
 	public ItemLifecyclePresentationCallbacks, public LaserUpdateCallbacks,
 	public EnemyBulletPresentationCallbacks, public Stage1PreparationPresentation,
 	public Stage1SetupPresentation, public Stage1FramePresentation, public TileInitialCallbacks,
-	public Stage1NotificationPresentation, public Stage2IntroPresentation, public Stage1EndPresentation {
+	public Stage1NotificationPresentation, public Stage4IntroPresentation, public Stage1EndPresentation {
 public:
 	unsigned sound_updates{};
 	unsigned intro_music_requests{};
@@ -33,6 +35,11 @@ public:
 	void bgm_title_clear() noexcept override {}
 	void music_stop() noexcept override {}
 	void boss_put(std::int16_t, std::int16_t, std::int16_t) noexcept override {}
+	void scene(BossIntroScene, std::int16_t, const StageState &) noexcept override {}
+	void render_marisa(MarisaSprite) noexcept override {}
+	void render_orb_line(ScreenPoint, ScreenPoint) noexcept override {}
+	void render_orb(MarisaOrbSprite) noexcept override {}
+	void clear_orb_on_front_page(std::size_t, ScreenPoint) noexcept override {}
 	void music_load(std::string_view) noexcept override { ++intro_music_requests; }
 	void music_play() noexcept override {}
 	void graph_scrollup(std::int16_t) noexcept override {}
@@ -280,6 +287,7 @@ void set_valid_pages(Stage1State &state) noexcept
 	state.scroll.line = 200;
 	state.scroll_line_on_page = {20, 37};
 	state.scroll.step = stage2 ? 80 : 116;
+	state.midboss_scroll_step = state.scroll.step;
 	state.scroll.step_advanced = 1;
 	state.tiles_egc_render_all = true;
 	state.midboss.scenery_frame = 1000;
@@ -318,6 +326,7 @@ void set_valid_pages(Stage1State &state) noexcept
 	state.scroll.line = 200;
 	state.scroll_line_on_page[1] = 37;
 	state.scroll.step = 116;
+	state.midboss_scroll_step = 116;
 	state.scroll.delta = 9;
 	Trace trace{};
 	auto invalidation = invalidation_presentation(trace);
@@ -711,21 +720,76 @@ void set_valid_pages(Stage1State &state) noexcept
 		state.input == 0 && state.stage_frame == 0;
 }
 
+[[nodiscard]] bool test_stage4_run_driver() noexcept
+{
+	StageState s; Stage4RunState run; Trace trace;
+	auto old = invalidation_presentation(trace);
+	Stage4InvalidationPresentation invalidation{trace, trace, trace, trace, old.bullets, trace, trace, trace, trace};
+	Stage4EntitiesPresentation entities{trace, trace, trace, static_cast<StonesCallbacks &>(trace), trace, trace, trace, trace, trace};
+	Stage4RunPresentation p{trace, invalidation, trace, trace, trace, entities, trace, trace, trace};
+	s.stage_id = 3; s.max_enemy_vm_steps = 64;
+	if (!stage4_setup_before_assets(s, false, trace)) return false;
+	s.stage_data.map_length = 4;
+	tiles_stuff_reset(s.tiles, s.frame.page_back, s.tile_mode, s.tiles_egc_render_all);
+	stage4_setup_after_assets(s, run.frame, run.stage_title_enabled);
+	if (!stage1_setup_items_and_score(s, trace)) return false;
+	if (tiles_fill_and_put_initial(s.tiles, s.stage_data, s.tile_sections, trace) != TileScrollResult::completed) return false;
+	if (s.scroll.speed != 2 || s.scroll.interval != 1 || s.midboss_scroll_step != 944 || !s.lasers_enabled) return false;
+	for (unsigned tick = 0; tick < 4; ++tick) {
+		if (stage4_run_prepare(s, run, p) != Stage1RunWait::input_sample) return false;
+		if (stage4_run_input(s, run, tick == 2 ? 0x40 : 0, p) !=
+			(tick == 2 ? Stage1RunWait::paused : Stage1RunWait::ready_for_frame)) return false;
+		if (tick == 2 && stage4_run_after_pause(s, run, false, p) != Stage1RunWait::ready_for_frame) return false;
+	}
+	s.scroll.done = true;
+	if (stage4_run_prepare(s, run, p) != Stage1RunWait::input_sample) return false;
+	if (stage4_run_input(s, run, 0, p) != Stage1RunWait::delay_one_frame) return false;
+	const auto finish = [&]() {
+		for (unsigned call = 0; call < 4000; ++call) {
+			const auto wait = stage4_run_wait(run);
+			if (wait == Stage1RunWait::ready_for_frame || wait == Stage1RunWait::cleared) return true;
+			if (wait == Stage1RunWait::delay_one_frame || wait == Stage1RunWait::delay_two_frames)
+				(void)stage4_run_after_delay(s, run, p);
+			else if (wait == Stage1RunWait::input_sample) (void)stage4_run_input(s, run, 16, p);
+			else if (wait == Stage1RunWait::acknowledgement_first_sample || wait == Stage1RunWait::acknowledgement_second_sample)
+				(void)stage4_run_acknowledgement(s, run, run.phase == Stage1RunPhase::intro ? run.intro.box.acknowledgement_released :
+					(run.ending.phase == Stage1EndPhase::boxes ? run.ending.box.acknowledgement_released : run.ending.released), p);
+			else return false;
+		}
+		return false;
+	};
+	if (!finish() || s.dialog.box_current != 35 || s.stage_frame != 5 || !s.boss_enabled) return false;
+	s.boss.phase = 1; s.marisa.defeat_frame = 99;
+	if (stage4_run_prepare(s, run, p) != Stage1RunWait::input_sample) return false;
+	if (stage4_run_input(s, run, 0, p) != Stage1RunWait::delay_one_frame || run.phase != Stage1RunPhase::ending) return false;
+	if (!finish()) return false;
+	return stage4_run_wait(run) == Stage1RunWait::cleared && s.stage_id == 4 && s.stage_frame == 6 && s.dialog.box_current == 52;
+}
+
 } // namespace
 
 int main()
 {
-	if(!test_invalidation_overload_borrows_one_state() ||
-		!test_stage2_invalidation_prefix() ||
-		!test_player_bomb_overload_uses_canonical_boss_and_frame() ||
-		!test_entities_overload_builds_local_adapters() ||
-		!test_enabled_enemy_rejects_invalid_projection_before_context() ||
-		!test_prepare_old_page_and_activation(false) || !test_prepare_old_page_and_activation(true) ||
-		!test_prepare_interval_refusal_prefix() || !test_notifications() ||
-		!test_setup_retains_and_sequences(false) || !test_setup_retains_and_sequences(true) || !test_setup_options_and_demo() ||
-		!test_connected_frame() || !test_initial_tile_ring() ||
-		!test_run_driver() || !test_stage2_run_driver() || !test_stage3_run_driver() || !test_run_early_quit_and_refusal()) {
-		return EXIT_FAILURE;
-	}
+#define CHECK_TEST(call) if (!(call)) { std::fprintf(stderr, "%s failed\n", #call); return EXIT_FAILURE; }
+	CHECK_TEST(test_invalidation_overload_borrows_one_state());
+	CHECK_TEST(test_stage2_invalidation_prefix());
+	CHECK_TEST(test_player_bomb_overload_uses_canonical_boss_and_frame());
+	CHECK_TEST(test_entities_overload_builds_local_adapters());
+	CHECK_TEST(test_enabled_enemy_rejects_invalid_projection_before_context());
+	CHECK_TEST(test_prepare_old_page_and_activation(false));
+	CHECK_TEST(test_prepare_old_page_and_activation(true));
+	CHECK_TEST(test_prepare_interval_refusal_prefix());
+	CHECK_TEST(test_notifications());
+	CHECK_TEST(test_setup_retains_and_sequences(false));
+	CHECK_TEST(test_setup_retains_and_sequences(true));
+	CHECK_TEST(test_setup_options_and_demo());
+	CHECK_TEST(test_connected_frame());
+	CHECK_TEST(test_initial_tile_ring());
+	CHECK_TEST(test_run_driver());
+	CHECK_TEST(test_stage2_run_driver());
+	CHECK_TEST(test_stage3_run_driver());
+	CHECK_TEST(test_stage4_run_driver());
+	CHECK_TEST(test_run_early_quit_and_refusal());
+#undef CHECK_TEST
 	return EXIT_SUCCESS;
 }

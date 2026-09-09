@@ -12,6 +12,8 @@ namespace {
 constexpr std::array<std::uint8_t, 8> faces{99, 99, 57, 96, 3, 99, 9, 96};
 constexpr std::array<std::uint8_t, 11> meira_faces{9, 54, 57, 9, 96, 150, 57, 96, 54, 96, 12};
 constexpr std::array<std::uint8_t, 3> stones_faces{12, 96, 12};
+constexpr std::array<std::uint8_t, 12> marisa_continued_faces{147, 0, 96, 0, 96, 54, 144, 144, 12, 96, 57, 144};
+constexpr std::array<std::uint8_t, 9> marisa_faces{147, 0, 96, 0, 96, 96, 57, 96, 57};
 
 void acknowledgement_begin(Stage1EndState &end) noexcept
 {
@@ -60,7 +62,8 @@ void bonus_begin(Stage1State &state, Stage1EndState &end,
 Stage1EndWait advance(Stage1State &state, Stage1EndState &end,
 	Stage1EndPresentation &presentation) noexcept
 {
-	const std::span<const std::uint8_t> sequence = end.boss == StageEndBoss::rika ?
+	const std::span<const std::uint8_t> sequence = end.boss == StageEndBoss::marisa ?
+		(state.continues_used != 0 ? std::span<const std::uint8_t>(marisa_continued_faces) : std::span<const std::uint8_t>(marisa_faces)) : end.boss == StageEndBoss::rika ?
 		std::span<const std::uint8_t>(faces) : end.boss == StageEndBoss::meira ?
 		std::span<const std::uint8_t>(meira_faces) : std::span<const std::uint8_t>(stones_faces);
 	if (end.phase == Stage1EndPhase::pre_slide && end.slide.phase == DialogSlidePhase::complete) {
@@ -68,6 +71,24 @@ Stage1EndWait advance(Stage1State &state, Stage1EndState &end,
 		end.phase = Stage1EndPhase::boxes;
 	} else if (end.phase == Stage1EndPhase::boxes && end.box.phase == DialogBoxPhase::complete) {
 		++end.sequence_index;
+		if (end.boss == StageEndBoss::marisa) {
+			if (end.sequence_index == 4 && state.continues_used == 0)
+				state.dialog.box_current = static_cast<std::uint8_t>(state.dialog.box_current + 8);
+			if (end.sequence_index == 7 && state.continues_used != 0) {
+				const auto offset = static_cast<std::size_t>(state.dialog.box_current) * 80;
+				const auto tens = state.continues_used / 10;
+				if (offset + 11 >= state.dialog.text.size() || tens >= 10) {
+					end.phase = Stage1EndPhase::refused;
+					return Stage1EndWait::refused;
+				}
+				if (tens != 0) {
+					state.dialog.text[offset + 8] = 0x82;
+					state.dialog.text[offset + 9] = static_cast<std::uint8_t>(0x4F + tens);
+				}
+				state.dialog.text[offset + 10] = 0x82;
+				state.dialog.text[offset + 11] = static_cast<std::uint8_t>(0x4F + state.continues_used % 10);
+			}
+		}
 		if (end.sequence_index < sequence.size())
 			dialog_box_begin(state.dialog, end.box, sequence[end.sequence_index], presentation);
 		else bonus_begin(state, end, presentation);
@@ -105,6 +126,16 @@ Stage1EndWait stage1_end_begin(Stage1State &state, Stage1EndState &end,
 	Stage1EndPresentation &presentation) noexcept
 {
 	end = {};
+	end.phase = Stage1EndPhase::pre_slide;
+	(void)dialog_pre_begin(state, state.dialog, end.slide, presentation);
+	return advance(state, end, presentation);
+}
+
+Stage1EndWait stage4_end_begin(StageState &state, Stage1EndState &end,
+	Stage1EndPresentation &presentation) noexcept
+{
+	end = {};
+	end.boss = StageEndBoss::marisa;
 	end.phase = Stage1EndPhase::pre_slide;
 	(void)dialog_pre_begin(state, state.dialog, end.slide, presentation);
 	return advance(state, end, presentation);
@@ -176,7 +207,8 @@ Stage1EndWait stage1_end_acknowledgement(Stage1State &state, Stage1EndState &end
 			const bool seen = end.pair_seen || pressed;
 			end.acknowledgement = Stage1EndWait::acknowledgement_first_sample;
 			if (end.released && seen) {
-				if (end.phase == Stage1EndPhase::bonus_acknowledgement && end.boss != StageEndBoss::stones) {
+				if (end.phase == Stage1EndPhase::bonus_acknowledgement &&
+					(end.boss == StageEndBoss::rika || end.boss == StageEndBoss::meira)) {
 					end.phase = Stage1EndPhase::end_acknowledgement;
 					acknowledgement_begin(end);
 				} else {

@@ -67,6 +67,8 @@ public:
 	// Headless sinks may ignore them; neither supplies gameplay results.
 	virtual void sound_effect(std::uint8_t) noexcept {}
 	virtual void graph_scroll(std::uint16_t, std::uint16_t, std::uint16_t) noexcept {}
+	virtual void clear_boss_playfield() noexcept {}
+	virtual void stage4_tile_effect(std::int16_t) noexcept {}
 	virtual void invalidate_scenery(
 		StageSceneryInvalidation invalidation) noexcept = 0;
 	virtual void palette_set(std::uint8_t index,
@@ -79,6 +81,7 @@ public:
 	virtual void grcg_set_color(std::uint8_t color) noexcept = 0;
 	virtual void dot_square(ScreenPoint topleft,
 		std::uint8_t edge) noexcept = 0;
+	virtual void dot_square_unput(ScreenPoint, std::uint8_t) noexcept {}
 	virtual void grcg_off() noexcept = 0;
 };
 

@@ -5,6 +5,9 @@
 #include "th02/core/meira.hpp"
 #include "th02/core/midboss2.hpp"
 #include "th02/core/midboss3.hpp"
+#include "th02/core/midboss4.hpp"
+#include "th02/core/marisa.hpp"
+#include "th02/core/bg_particle.hpp"
 #include "th02/core/stones.hpp"
 #include "th02/core/stage3_effect.hpp"
 #include "th02/core/dialog.hpp"
@@ -64,6 +67,10 @@ struct StageState {
 	MeiraState meira{};
 	Midboss2State midboss2{};
 	Midboss3State midboss3{};
+	Midboss4State midboss4{};
+	MarisaState marisa{};
+	BgParticleState background_particles{};
+	std::int16_t stage4_tile_top{};
 	StonesState stones{};
 	Stage3EffectState stage3_effect{};
 	std::uint16_t stage2_scenery_frame{};
@@ -94,6 +101,7 @@ struct StageState {
 	bool quit{};
 	// This is the stage-loop's raw bool16, distinct from Midboss1State::active.
 	std::int16_t midboss_active{};
+	std::int16_t midboss_scroll_step{};
 	bool boss_enabled{};
 	bool enemies_enabled{};
 	bool lasers_enabled{};
@@ -109,6 +117,7 @@ struct StageState {
 	std::uint8_t stage_id{};
 	std::uint8_t stage_title_halflen{};
 	std::uint8_t start_lives{};
+	std::uint16_t continues_used{};
 };
 
 // The only new pass-level callback aggregate. Each member is an existing

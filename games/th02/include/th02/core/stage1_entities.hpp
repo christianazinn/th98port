@@ -27,6 +27,7 @@ enum class StageProgression : std::int16_t {
 enum class StageEntitiesResult : std::uint8_t {
 	completed,
 	stones_refused,
+	marisa_refused,
 	enemy_refused,
 	rika_refused,
 	meira_refused,

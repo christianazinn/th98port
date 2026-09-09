@@ -3,7 +3,7 @@
 
 namespace th02::core {
 struct Stage3InvalidationPresentation {
-	StageSceneryCallbacks &stones;
+	StageSceneryCallbacks &background;
 	Midboss2Callbacks &midboss;
 	EnemyInvalidationCallbacks &enemies;
 	PlayerFrameInvalidationCallbacks &player;

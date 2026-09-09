@@ -57,14 +57,16 @@ struct Sink final : Stage1EndPresentation, Stage1FramePresentation {
 	void page_show(std::size_t) noexcept override {}
 };
 
-void complete_end(StageEndBoss kind)
+void complete_end(StageEndBoss kind, std::uint16_t continues = 0)
 {
 	const bool meira = kind == StageEndBoss::meira;
 	const bool stones = kind == StageEndBoss::stones;
+	const bool marisa = kind == StageEndBoss::marisa;
 	Stage1State state{};
 	Stage1EndState end{};
 	Sink sink{state};
-	state.dialog.box_current = stones ? 8 : meira ? 24 : 16;
+	state.dialog.box_current = marisa ? 35 : stones ? 8 : meira ? 24 : 16;
+	state.continues_used = continues;
 	state.stage_frame = 901;
 	state.resident_frame = 999;
 	state.random.seed = 52;
@@ -80,7 +82,7 @@ void complete_end(StageEndBoss kind)
 	state.spark_parameters.acceleration_x = 5;
 	state.stage_bg_flash.frame = 20;
 	state.stage_progression = StageProgression::clear;
-	auto wait = stones ? stage3_end_begin(state, end, sink) : meira ? stage2_end_begin(state, end, sink) : stage1_end_begin(state, end, sink);
+	auto wait = marisa ? stage4_end_begin(state, end, sink) : stones ? stage3_end_begin(state, end, sink) : meira ? stage2_end_begin(state, end, sink) : stage1_end_begin(state, end, sink);
 	unsigned delays = 0, samples = 0, calls = 0;
 	while (wait != Stage1EndWait::complete) {
 		require(++calls < 2000);
@@ -99,14 +101,19 @@ void complete_end(StageEndBoss kind)
 		default: require(false);
 		}
 	}
-	require(samples == (stones ? 114U : meira ? 418U : 304U) && delays == (stones ? 81U : meira ? 117U : 105U));
-	require(state.dialog.box_current == (stones ? 11 : meira ? 35 : 24) && state.input == 1);
-	require(sink.faces == (stones ? std::vector<std::int16_t>({12, 96, 12}) : meira ? std::vector<std::int16_t>({9, 54, 57, 9, 96, 150, 57, 96, 54, 96, 12}) :
+	require(samples == (marisa ? (continues != 0 ? 456U : 342U) : stones ? 114U : meira ? 418U : 304U) && delays == (marisa ? (continues != 0 ? 117U : 105U) : stones ? 81U : meira ? 117U : 105U));
+	require(state.dialog.box_current == (marisa ? (continues != 0 ? 47 : 52) : stones ? 11 : meira ? 35 : 24) && state.input == 1);
+	if (marisa && continues != 0) {
+		const auto offset = 42U * 80U;
+		require(state.dialog.text[offset + 8] == 0x82 && state.dialog.text[offset + 9] == 0x50);
+		require(state.dialog.text[offset + 10] == 0x82 && state.dialog.text[offset + 11] == 0x51);
+	}
+	require(sink.faces == (marisa ? (continues != 0 ? std::vector<std::int16_t>({147, 0, 96, 0, 96, 54, 144, 144, 12, 96, 57, 144}) : std::vector<std::int16_t>({147, 0, 96, 0, 96, 96, 57, 96, 57})) : stones ? std::vector<std::int16_t>({12, 96, 12}) : meira ? std::vector<std::int16_t>({9, 54, 57, 9, 96, 150, 57, 96, 54, 96, 12}) :
 		std::vector<std::int16_t>({99, 99, 57, 96, 3, 99, 9, 96})));
 	require(sink.events == std::vector<int>({2, 3, 10, 11, 12, 13, 14, 15, 4, 5, 2, 6}));
 	require(sink.pages == std::vector<std::size_t>({1})); // No dialog_post.
 	require(state.tile_mode == 0 && state.dialog.restore_tile_mode_none_at_post);
-	require(state.stage_id == 1 && state.spark_parameters.acceleration_x == (stones ? 5 : 0) && state.stage_bg_flash.frame == (meira || stones ? 20 : 0));
+	require(state.stage_id == 1 && state.spark_parameters.acceleration_x == (stones || marisa ? 5 : 0) && state.stage_bg_flash.frame == (meira || stones || marisa ? 20 : 0));
 	require(state.score.score == 2720 && state.score.score_delta == 2710);
 	require(state.stage_frame == 901 && state.resident_frame == 999 && state.random == random_before);
 	require(sink.cells.size() == 21U * 24U * 23U);
@@ -149,4 +156,4 @@ void acknowledgement_requires_new_release()
 	require(end.phase == Stage1EndPhase::leave_overlay && state.input == 1 && state.dialog.box_current == 0);
 }
 } // namespace
-int main() { complete_end(StageEndBoss::rika); complete_end(StageEndBoss::meira); complete_end(StageEndBoss::stones); acknowledgement_requires_new_release(); }
+int main() { complete_end(StageEndBoss::rika); complete_end(StageEndBoss::meira); complete_end(StageEndBoss::stones); complete_end(StageEndBoss::marisa); complete_end(StageEndBoss::marisa, 12); acknowledgement_requires_new_release(); }

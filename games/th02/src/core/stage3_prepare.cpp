@@ -9,7 +9,7 @@ Stage1InvalidationResult stage3_invalidate(StageState &s,
 	if (s.boss_enabled) {
 		for (std::size_t i = 0; i < stone_count; ++i) {
 			if (s.stones.flag[i] < 4) {
-				p.stones.invalidate_scenery({s.stones.topleft[i], 32, 32});
+				p.background.invalidate_scenery({s.stones.topleft[i], 32, 32});
 				if (s.stones.flag[i] == 3) s.stones.flag[i] = 4;
 			}
 		}

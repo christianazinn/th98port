@@ -1,6 +1,8 @@
 #pragma once
 
 #include "th02/core/stage3_prepare.hpp"
+#include "th02/core/stage4_prepare.hpp"
+#include <bit>
 
 namespace th02::core::detail {
 // Compile-time stage dispatch shares the source loop without gameplay callbacks.
@@ -13,7 +15,8 @@ Stage1PreparationResult stage_prepare(StageState &state, Invalidation &invalidat
 		return Stage1PreparationResult::invalid_page;
 	state.scroll.line = state.scroll_line_on_page[state.frame.page_back];
 	Stage1InvalidationResult invalidated;
-	if constexpr (Stage == 2) invalidated = stage3_invalidate(state, invalidation);
+	if constexpr (Stage == 3) invalidated = stage4_invalidate(state, invalidation);
+	else if constexpr (Stage == 2) invalidated = stage3_invalidate(state, invalidation);
 	else if constexpr (Stage == 1) invalidated = stage2_invalidate(state, invalidation);
 	else invalidated = stage1_invalidate(state, invalidation);
 	if (invalidated != Stage1InvalidationResult::completed)
@@ -34,13 +37,22 @@ Stage1PreparationResult stage_prepare(StageState &state, Invalidation &invalidat
 	if constexpr (Stage == 2) {
 		if (!stage3_invalidate(state.stage3_effect, state.frame.page_back, presentation))
 			return Stage1PreparationResult::scenery_refused;
-	} else if (stage_scenery_invalidate(state.scenery, state.frame.page_back,
+	} else if constexpr (Stage < 2) {
+		if (stage_scenery_invalidate(state.scenery, state.frame.page_back,
 		state.frame.page_front, presentation) != StageSceneryPageResult::completed)
 		return Stage1PreparationResult::scenery_refused;
+	}
 	presentation.tiles_render(state);
 	state.tiles_egc_render_all = false;
 	StageSceneryResult scenery_result;
-	if constexpr (Stage == 2) {
+	if constexpr (Stage == 3) {
+		scenery_result = StageSceneryResult::idle;
+		if (!state.reduce_effects && !state.boss_enabled && state.frame.page_back == 0) {
+			state.stage4_tile_top = std::bit_cast<std::int16_t>(static_cast<std::uint16_t>(152 + state.scroll.line));
+			if (state.stage4_tile_top >= 400) state.stage4_tile_top = static_cast<std::int16_t>(state.stage4_tile_top - 400);
+			presentation.stage4_tile_effect(state.stage4_tile_top);
+		}
+	} else if constexpr (Stage == 2) {
 		scenery_result = stage3_update_and_render(state.stage3_effect, state.frame.page_back,
 			state.scroll.line, state.bomb_animation.slowdown_factor,
 			state.bomb_animation.palette_tone, presentation) ? StageSceneryResult::updated : StageSceneryResult::invalid_page;
@@ -56,7 +68,7 @@ Stage1PreparationResult stage_prepare(StageState &state, Invalidation &invalidat
 	if (scenery_result == StageSceneryResult::invalid_page)
 		return Stage1PreparationResult::scenery_refused;
 	presentation.egc_off();
-	if (state.scroll.step == (Stage == 2 ? 103 : Stage == 1 ? 80 : 116)) state.midboss_active = 1;
+	if (state.scroll.step == state.midboss_scroll_step) state.midboss_active = 1;
 	if (!scroll_advance_line(state.scroll, saved_line))
 		return Stage1PreparationResult::scroll_interval_zero;
 	state.scroll_line_on_page[state.frame.page_back] = state.scroll.line;

@@ -7,6 +7,7 @@ void gameplay_options_apply(Stage1State &state, bool reduce_effects,
 	std::uint16_t continues_used) noexcept
 {
 	state.reduce_effects = reduce_effects;
+	state.continues_used = continues_used;
 	if (continues_used != 0U) {
 		state.score.score = continues_used >= 9U ? 9 : continues_used;
 		state.items.bigpower_override = static_cast<std::uint16_t>((state.stage_id % 5U) + 2U);
@@ -23,6 +24,7 @@ bool stage_setup_before_assets(StageState &state, bool demo,
 	state.spark_sprite_interval = spark_defaults.sprite_interval;
 	state.spark_parameters.age_max = spark_defaults.age_max;
 	enemies_reset(state.enemies);
+	bg_particles_reset(state.background_particles);
 	presentation.background_particles_reset();
 	lasers_reset(state.lasers);
 	bomb_reset(state.bomb);
@@ -42,6 +44,8 @@ bool stage_setup_before_assets(StageState &state, bool demo,
 	state.frame.player.on_page[1] = {208, 336};
 	state.stage_frame = 0;
 	state.midboss_active = 0;
+	constexpr std::int16_t midboss_steps[]{116, 80, 103, 944, -1, 200};
+	state.midboss_scroll_step = midboss_steps[state.stage_id];
 	state.stage_progression = StageProgression::stage;
 	state.bomb_animation.slowdown_factor = 1;
 	if (!demo) {
@@ -71,6 +75,21 @@ bool stage3_setup_before_assets(StageState &state, bool demo,
 	Stage1SetupPresentation &presentation) noexcept
 {
 	return state.stage_id == 2U && stage_setup_before_assets(state, demo, presentation);
+}
+
+bool stage4_setup_before_assets(StageState &state, bool demo,
+	Stage1SetupPresentation &presentation) noexcept
+{
+	return state.stage_id == 3U && stage_setup_before_assets(state, demo, presentation);
+}
+
+void stage4_setup_after_assets(StageState &state, Stage1FrameSchedule &schedule,
+	bool &stage_title_enabled) noexcept
+{
+	stage1_setup_after_assets(state, schedule, stage_title_enabled);
+	state.lasers_enabled = true;
+	state.scroll.speed = 2;
+	state.scroll.interval = 1;
 }
 
 void stage1_setup_after_assets(Stage1State &state, Stage1FrameSchedule &schedule,
