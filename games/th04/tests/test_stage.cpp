@@ -36,6 +36,17 @@ int main()
 	if (s.boss.elly_boomerang.flag != EllyBoomerangFlag::free) return 13;
 	if (!stage_fights_setup(s) || s.midboss.frames_until != 1600 || s.midboss.hp != 850) return 12;
 	s.stage_id = 3;
+	s.boss.reimu_orbs[0].spin_time = 12;
+	s.boss.marisa_bits[0].distance = 12;
+	s.boss.reimu_pattern8_angle = 42;
+	stage_init(s, p);
+	if (s.boss.reimu_orbs[0].spin_time != 0 || s.boss.marisa_bits[0].distance != 0 ||
+		s.boss.reimu_pattern8_angle != 42) return 14;
+	if (!stage_fights_setup(s) || s.midboss.frames_until != 2800 || s.midboss.hp != 1200) return 15;
+	s.stage_id = 4;
+	stage_init(s, p);
+	if (!stage_fights_setup(s) || s.midboss.frames_until != 60000) return 16;
+	s.stage_id = 5;
 	if (stage_fights_setup(s) || stage_tick(s, 0, false, p) != StageResult::unsupported) return 10;
 	std::cout << "Stage admission and explicit modal boundaries passed\n";
 }

@@ -373,6 +373,24 @@ bool lasers_shootout_add(State &state, Presentation &presentation) noexcept
 	return true;
 }
 
+bool laser_fixed_spawn(
+	State &state, std::uint8_t slot, Presentation &presentation
+) noexcept
+{
+	if(slot >= state.lasers.pool.size()) return false;
+	auto &laser = state.lasers.pool[slot];
+	if(!is_free(laser.flag)) return true;
+	fixed_init(laser, state.lasers.laser_template.coords.origin);
+	laser.active_at_age = state.lasers.laser_template.active_at_age;
+	laser.shrink_at_age = state.lasers.laser_template.shrink_at_age;
+	laser.color = state.lasers.laser_template.color;
+	laser.grow_to_width = state.lasers.laser_template.coords.width;
+	laser.coords.width = 1U;
+	laser.coords.angle = state.lasers.laser_template.coords.angle;
+	presentation.sound(5U);
+	return true;
+}
+
 bool laser_manual_fixed_spawn(
 	State &state, std::uint8_t slot, Presentation &presentation
 ) noexcept

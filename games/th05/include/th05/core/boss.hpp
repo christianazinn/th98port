@@ -108,6 +108,99 @@ struct AliceState {
 	bool operator==(const AliceState &) const = default;
 };
 
+// th05/main/bullet/b4ball.hpp and cheeto.hpp. The source overlays the first
+// seven B4 ball records as cheeto heads; CheetoHead is the adapter's local
+// snapshot shape, while trails remain distinct source BSS in Stage4State.
+struct B4Ball {
+	std::uint8_t flag{}, angle{};
+	BossMotion pos{};
+	std::uint16_t age{};
+	bool revenge{};
+	std::int16_t patnum_tiny_base{}, hp{}, damage_this_frame{};
+	std::uint8_t speed{};
+	bool operator==(const B4Ball &) const = default;
+};
+
+struct B4BallTemplate {
+	std::uint8_t angle{};
+	BossPoint origin{};
+	bool revenge{};
+	std::int16_t patnum_tiny_base{}, hp{};
+	std::uint8_t speed{};
+	bool operator==(const B4BallTemplate &) const = default;
+};
+
+enum class CheetoFlag : std::uint8_t { free, decelerate, speedup };
+
+struct CheetoHead {
+	CheetoFlag flag{};
+	std::uint8_t angle{};
+	BossMotion pos{};
+	std::uint16_t age{};
+	std::int16_t sprite{};
+	std::uint8_t speed{};
+	bool operator==(const CheetoHead &) const = default;
+};
+
+struct CheetoTrail {
+	CheetoFlag flag{};
+	std::int8_t color{};
+	std::array<BossPoint, 16U> nodes{};
+	std::array<std::uint8_t, 16U> sprites{};
+	bool operator==(const CheetoTrail &) const = default;
+};
+
+struct CheetoTemplate {
+	std::uint8_t angle{};
+	BossPoint origin{};
+	std::int8_t color{};
+	std::uint8_t speed{};
+	bool operator==(const CheetoTemplate &) const = default;
+};
+
+enum class Stage4PairMaiPattern : std::uint8_t {
+	blue_cross_stacks, turning_blue_spread, rotating_pellets, blue_ball_spread,
+	manual_laser, blue_ball_ring, cheetos,
+};
+enum class Stage4PairYukiPattern : std::uint8_t {
+	exact_linear_spread, red_ring, red_stack, red_ball_spread, red_big_stack,
+	random_pellets, rotating_red_ring, cheetos,
+};
+enum class Stage4SoloPattern : std::uint8_t {
+	mai_spread_pairs, mai_turning_stacks, mai_spread_balls, mai_spread_stacks,
+	mai_revenge_balls, mai_fixed_lasers, yuki_ring, yuki_random_spread,
+	yuki_pellet_ring, yuki_spread_balls, yuki_ball_cross, yuki_sweeping_stacks,
+	yuki_speedup_cloud,
+};
+enum class Stage4MaiLaserPattern : std::uint8_t { spread, ring, ball_triplet };
+enum class Stage4Fight : std::uint8_t { pair, mai_solo, yuki_solo };
+
+// The custom pool is reset by stage_init. `trails`, selectors, and laser
+// words are ordinary source BSS and deliberately retain their contents.
+struct Stage4CustomEntities {
+	B4BallTemplate b4ball_template{};
+	std::array<B4Ball, 63U> b4balls{};
+	bool operator==(const Stage4CustomEntities &) const = default;
+};
+
+struct Stage4State {
+	BossState yuki{};
+	Stage4CustomEntities custom{};
+	std::array<CheetoTrail, 7U> cheeto_trails{};
+	Stage4PairMaiPattern pair_mai_pattern{};
+	Stage4PairYukiPattern pair_yuki_pattern{};
+	Stage4SoloPattern solo_pattern{};
+	Stage4MaiLaserPattern mai_laser_pattern{};
+	std::int16_t mai_laser_count{}, mai_laser_angle_speed{}, mai_laser_angle_progress{};
+	// m4_updt.cpp's separate BSS center for the two horizontal warp shakes.
+	// It is not part of the Stage 4 custom pool and deliberately retains its
+	// previous value until Midboss 4 starts a new warp on frame 16.
+	std::int16_t midboss_warp_x{};
+	Stage4Fight fight{};
+	bool pair_defeated_yuki{};
+	bool operator==(const Stage4State &) const = default;
+};
+
 // Stage setup invokes this after its non-combat initialization, preserving the
 // source values for Stage 1's midboss and Sara combat objects.
 void stage1_fights_setup(State &) noexcept;
@@ -139,5 +232,13 @@ void stage3_midboss_activate(State &) noexcept;
 void stage3_boss_activate(State &) noexcept;
 [[nodiscard]] bool stage3_fights_update(State &, Presentation &) noexcept;
 void stage3_fights_render_tail(State &, Presentation &) noexcept;
+
+// Stage 4 carries Midboss 4 and Mai/Yuki's paired and solo fights. The State
+// owner clears only Stage4State::custom at stage initialization.
+void stage4_fights_setup(State &) noexcept;
+void stage4_midboss_activate(State &) noexcept;
+void stage4_boss_activate(State &) noexcept;
+[[nodiscard]] bool stage4_fights_update(State &, Presentation &) noexcept;
+void stage4_fights_render_tail(State &, Presentation &) noexcept;
 
 } // namespace th05::core

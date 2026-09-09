@@ -64,6 +64,52 @@ struct EllyBoomerang {
 	bool operator==(const EllyBoomerang &) const = default;
 };
 
+// th04/main/boss/b4r.hpp. Reimu owns all 32 source custom slots during the
+// Stage 4 fight. The source changes the raw flag from spin to movement by an
+// increment, so keep those byte values explicit.
+inline constexpr std::size_t reimu_orb_count = 32U;
+enum class ReimuOrbFlag : std::uint8_t {
+	free = 0U,
+	moveout_spin = 1U,
+	move = 2U,
+};
+
+struct ReimuOrb {
+	ReimuOrbFlag flag{ReimuOrbFlag::free};
+	std::uint8_t angle{};
+	Point center{}, origin{}, velocity{};
+	std::uint16_t spin_time{};
+	std::int16_t distance{}, unknown{};
+	std::uint8_t move_speed{}, angle_speed{};
+	bool operator==(const ReimuOrb &) const = default;
+};
+
+// th04/main/boss/b4m.hpp. Marisa reinterprets the same source custom block
+// as four independently damageable orbiting bits.
+inline constexpr std::size_t marisa_bit_count = 4U;
+enum class MarisaBitFlag : std::uint8_t {
+	free = 0U,
+	moveout_spin = 1U,
+	spin = 2U,
+	kill_anim = 0x80U,
+};
+
+enum class MarisaBitFire : std::uint8_t {
+	none = 0U,
+	sideways_spread = 1U,
+	single = 2U,
+};
+
+struct MarisaBit {
+	MarisaBitFlag flag{MarisaBitFlag::free};
+	std::uint8_t angle{};
+	Point center{};
+	std::uint8_t patnum{};
+	std::int16_t distance{}, moveout_speed{}, hp{};
+	std::uint8_t damage_this_frame{}, angle_speed{};
+	bool operator==(const MarisaBit &) const = default;
+};
+
 // th04/main/boss/explode.hpp. The source keeps two small explosion slots and
 // one big slot; their aging is deliberately a render-tail operation.
 struct BossExplosion {
@@ -116,6 +162,24 @@ struct BossState {
 	std::uint8_t elly_pattern_set{};
 	std::int16_t elly_scythe_tick{};
 	EllyBoomerang elly_boomerang{};
+	std::array<ReimuOrb, reimu_orb_count> reimu_orbs{};
+	ReimuOrb reimu_orb_template{};
+	std::uint8_t reimu_orb_patnum_base{}, reimu_pattern8_angle{};
+	std::uint8_t reimu_sweep_angle_delta{};
+	bool reimu_bg_pulse_dimming{}, reimu_afterimage{};
+	std::array<MarisaBit, marisa_bit_count> marisa_bits{};
+	std::uint8_t marisa_bits_alive{}, marisa_bit_angle_speed{};
+	MarisaBitFire marisa_bit_fire{MarisaBitFire::none};
+	std::uint8_t marisa_pattern_prev{}, marisa_bits_at_pattern_start{};
+	bool marisa_pulse_dimming{};
+	std::uint8_t marisa_patterns_without_bits{}, marisa_explode_milestone{};
+	std::uint8_t marisa_flystep_pointreflected_tick{};
+	// th04/main/boss/b4m.cpp. Yuuka's Stage 5 controls are separate source
+	// BSS, retained across stage setup just as the original does.
+	std::uint8_t yuuka5_warp_phase{};
+	std::int16_t yuuka5_spread_origin_x{};
+	std::uint8_t yuuka5_ring_rate{}, yuuka5_ring_accumulator{};
+	std::uint8_t yuuka5_palette_tone{};
 	bool operator==(const BossState &) const = default;
 };
 
@@ -149,6 +213,16 @@ void stage3_midboss_activate(State &) noexcept;
 void stage3_boss_activate(State &) noexcept;
 [[nodiscard]] bool stage3_fights_update(State &, Presentation &) noexcept;
 void stage3_fights_render_tail(State &, Presentation &) noexcept;
+
+void stage4_fights_setup(State &) noexcept;
+void stage4_boss_activate(State &) noexcept;
+[[nodiscard]] bool stage4_fights_update(State &, Presentation &) noexcept;
+void stage4_fights_render_tail(State &, Presentation &) noexcept;
+
+void stage5_fights_setup(State &) noexcept;
+void stage5_boss_activate(State &) noexcept;
+[[nodiscard]] bool stage5_fights_update(State &, Presentation &) noexcept;
+void stage5_fights_render_tail(State &, Presentation &) noexcept;
 
 // The later midboss fights share the source shot collision and score-bonus
 // behavior, while keeping their own phase machines and source-local bytes.

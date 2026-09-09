@@ -81,6 +81,36 @@ struct Trace final : Presentation {
 	return trace.sounds == std::vector<std::uint8_t>{5U};
 }
 
+[[nodiscard]] bool timed_fixed_spawn()
+{
+	auto state = source_state();
+	Trace trace;
+	auto &source = state.lasers.laser_template;
+	source.coords.origin = {1000, 1000};
+	source.coords.width = 3;
+	source.active_at_age = 2;
+	source.shrink_at_age = 6;
+	const auto template_before = source;
+	auto &laser = state.lasers.pool[1];
+	laser.shootout_speed = 73;
+	laser.padding = {1, 2, 3};
+	if (!laser_fixed_spawn(state, 1, trace) || source != template_before ||
+		laser.active_at_age != 2 || laser.shrink_at_age != 6 ||
+		laser.coords.width != 1 || laser.grow_to_width != 3 ||
+		laser.shootout_speed != 73 || laser.padding != std::array<std::uint8_t, 3>{1, 2, 3})
+		return false;
+	const auto occupied = laser;
+	if (!laser_fixed_spawn(state, 1, trace) || laser != occupied || trace.sounds.size() != 1 ||
+		laser_fixed_spawn(state, 32, trace)) return false;
+	for (unsigned i = 0; i < 2; ++i) if (!lasers_update(state, trace)) return false;
+	if (laser.flag != LaserFlag::fixed_wait_to_grow || laser.age != 2) return false;
+	if (!lasers_update(state, trace) || laser.flag != LaserFlag::fixed_grow) return false;
+	if (!lasers_update(state, trace) || laser.flag != LaserFlag::fixed_active) return false;
+	for (unsigned i = 0; i < 6; ++i) if (!lasers_update(state, trace)) return false;
+	return laser.flag == LaserFlag::free && laser.age == 10 &&
+		trace.sounds == std::vector<std::uint8_t>{5, 6};
+}
+
 [[nodiscard]] bool collision_gaps_and_clear_decay()
 {
 	auto state = source_state();
@@ -189,6 +219,7 @@ int main()
 	} tests[] = {
 		{"manual spawn and grow", manual_spawn_and_grow},
 		{"shootout add and full pool", shootout_add_and_full_pool},
+		{"timed fixed spawn", timed_fixed_spawn},
 		{"collision gaps and clear decay", collision_gaps_and_clear_decay},
 		{"signed shrink and render invalidation", signed_shrink_and_render_invalidation},
 		{"slot and reached-wrap refusals", slot_refusal_and_reached_wrap_refusal},

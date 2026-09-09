@@ -12,6 +12,8 @@
 #include "th05/core/laser.hpp"
 #include "th05/core/enemy.hpp"
 #include "th05/core/stage_scenery.hpp"
+#include "th05/core/sword.hpp"
+#include "th05/core/b6ball.hpp"
 #include "pc98/th0405_sparks.hpp"
 #include <bit>
 
@@ -47,6 +49,9 @@ struct State {
 	MidbossState midboss{};
 	BossState boss{};
 	AliceState alice{};
+	Stage4State stage4{};
+	SwordState swords{};
+	B6BallState b6balls{};
 	BossExplosionState boss_explosions{};
 	BulletState bullets{};
 	LaserState lasers{};

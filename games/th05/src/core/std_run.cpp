@@ -17,6 +17,7 @@ bool std_run(State &state, Presentation &) noexcept
 	if (state.stage_id == 0) stage1_midboss_activate(state);
 	else if (state.stage_id == 1) stage2_midboss_activate(state);
 	else if (state.stage_id == 2) stage3_midboss_activate(state);
+	else if (state.stage_id == 3) stage4_midboss_activate(state);
 	else return false;
 	if (static_cast<std::size_t>(s.ip) + 1 >= s.data.size()) return false;
 	if (read_word(s.data, s.ip) != state.stage_frame) return true;

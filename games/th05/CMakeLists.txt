@@ -12,7 +12,8 @@ add_library(th05_core STATIC src/core/player.cpp src/core/item.cpp src/core/scor
 	src/core/shot_patterns.cpp src/core/bomb.cpp src/core/std_load.cpp
 	src/core/std_run.cpp src/core/scroll.cpp src/core/stage_init.cpp
 	src/core/stage.cpp src/core/enemy.cpp src/core/bullet.cpp src/core/laser.cpp
-	src/core/boss.cpp src/core/stage_bonus.cpp src/core/stage_scenery.cpp)
+	src/core/boss.cpp src/core/stage_bonus.cpp src/core/stage_scenery.cpp
+	src/core/stage4_projectiles.cpp src/core/sword.cpp src/core/b6ball.cpp)
 target_include_directories(th05_core PUBLIC include)
 target_link_libraries(th05_core PUBLIC pc98_numeric)
 if(MSVC)
@@ -32,8 +33,17 @@ else()
 endif()
 
 if(BUILD_TESTING)
+	add_executable(th05-stage-chain ../../shared/tests/th0405_stage_chain.cpp)
+	target_link_libraries(th05-stage-chain PRIVATE th05_core)
+	target_compile_definitions(th05-stage-chain PRIVATE TH_STAGE_CHAIN_GAME=5)
+	if(MSVC)
+		target_compile_options(th05-stage-chain PRIVATE /W4 /WX /permissive- /Zc:preprocessor)
+	else()
+		target_compile_options(th05-stage-chain PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror)
+	endif()
+	add_test(NAME th05-stage-chain-help COMMAND th05-stage-chain --help)
 	add_test(NAME th05-headless-help COMMAND th05-headless --help)
-	foreach(test IN ITEMS gameplay item shot_patterns bomb std scroll stage enemy bullet laser boss boss2 boss3 stage_bonus stage_scenery)
+	foreach(test IN ITEMS gameplay item shot_patterns bomb std scroll stage enemy bullet laser boss boss2 boss3 boss4 stage_bonus stage_scenery stage4_projectiles sword b6ball)
 		string(REPLACE "_" "-" name "${test}")
 		add_executable(th05-${name}-tests tests/test_${test}.cpp)
 		target_link_libraries(th05-${name}-tests PRIVATE th05_core)

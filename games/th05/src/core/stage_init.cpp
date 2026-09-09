@@ -21,6 +21,9 @@ void stage_init(State &s, Presentation &p) noexcept
 	s.enemies.enemies.fill({});
 	s.stage2_scenery.particles.fill({}); // Source custom_entities reset.
 	s.alice.puppets.fill({});
+	s.stage4.custom = {};
+	s.swords = {};
+	s.b6balls = {};
 	s.sparks.fill({});
 	s.bullets.pool.pellets.fill({});
 	s.bullets.pool.bullets16.fill({});

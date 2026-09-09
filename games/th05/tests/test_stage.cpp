@@ -54,6 +54,19 @@ int main()
 	if (!stage_fights_setup(s) || s.midboss.frames_until != 5750 || s.midboss.hp != 1400)
 		return EXIT_FAILURE;
 	s.stage_id = 3;
+	s.stage4.custom.b4balls[0].age = 12;
+	s.stage4.cheeto_trails[0].color = 7;
+	s.stage4.mai_laser_count = 42;
+	s.swords.pool[0].twirl_time = 17;
+	s.swords.sword_template.speed = 23;
+	stage_init(s, p);
+	if (s.stage4.custom.b4balls[0].age != 0 ||
+		s.stage4.cheeto_trails[0].color != 7 || s.stage4.mai_laser_count != 42 ||
+		s.swords.pool[0].twirl_time != 0 || s.swords.sword_template.speed != 0)
+		return EXIT_FAILURE;
+	if (!stage_fights_setup(s) || s.midboss.frames_until != 3900 || s.midboss.hp != 1100)
+		return EXIT_FAILURE;
+	s.stage_id = 4;
 	if (stage_fights_setup(s) || stage_tick(s, 0, false, p) != StageResult::unsupported)
 		return EXIT_FAILURE;
 	return EXIT_SUCCESS;
