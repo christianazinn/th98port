@@ -45,6 +45,8 @@ void stage_init(State &s, Presentation &p) noexcept
 	s.boss.elly_boomerang = {};
 	s.boss.reimu_orbs.fill({});
 	s.boss.marisa_bits.fill({});
+	s.yuuka6_customs = {};
+	s.boss.gengetsu_spawncolumns.fill({});
 	s.sparks.fill({});
 	s.bullets.pool.fill({});
 	s.circles.pool.fill({});

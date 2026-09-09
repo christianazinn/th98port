@@ -2,11 +2,12 @@
 #include "th04/core/state.hpp"
 #include "th04/core/scroll.hpp"
 #include "th04/core/midboss4.hpp"
+#include "th04/core/midboss_extra.hpp"
 
 namespace th04::core {
 StageResult stage_tick(State &s, std::uint16_t input, bool shift, Presentation &p) noexcept
 {
-	if (s.stage_id > 4) return StageResult::unsupported;
+	if (s.stage_id > 6) return StageResult::unsupported;
 	if (s.stage_clear_requested) return StageResult::cleared;
 	if (s.gameover_pending) return StageResult::gameover;
 	if (s.dialog_pending) return StageResult::dialog;
@@ -22,6 +23,7 @@ StageResult stage_tick(State &s, std::uint16_t input, bool shift, Presentation &
 	else if (s.stage_id == 1) stage2_midboss_activate(s);
 	else if (s.stage_id == 2) stage3_midboss_activate(s);
 	else if (s.stage_id == 3) stage4_midboss_activate(s);
+	else if (s.stage_id == 6) extra_midboss_activate(s);
 	if (!std_run(s, p)) return StageResult::unsupported;
 	circles_update(s, p);
 	if (!pc98::th0405::sparks_update({s.sparks, s.spark_ring_offset})) return StageResult::unsupported;
@@ -33,7 +35,9 @@ StageResult stage_tick(State &s, std::uint16_t input, bool shift, Presentation &
 	if (!(s.stage_id == 0 ? stage1_fights_update(s, p) :
 		s.stage_id == 1 ? stage2_fights_update(s, p) :
 		s.stage_id == 2 ? stage3_fights_update(s, p) :
-		s.stage_id == 3 ? stage4_fights_update(s, p) : stage5_fights_update(s, p)))
+		s.stage_id == 3 ? stage4_fights_update(s, p) :
+		s.stage_id == 4 ? stage5_fights_update(s, p) :
+		s.stage_id == 5 ? stage6_fights_update(s, p) : extra_fights_update(s, p)))
 		return StageResult::unsupported;
 	if (s.stage_clear_requested) return StageResult::cleared;
 	if (!items_update(s, p) ||
@@ -42,7 +46,9 @@ StageResult stage_tick(State &s, std::uint16_t input, bool shift, Presentation &
 	else if (s.stage_id == 1) stage2_fights_render_tail(s, p);
 	else if (s.stage_id == 2) stage3_fights_render_tail(s, p);
 	else if (s.stage_id == 3) stage4_fights_render_tail(s, p);
-	else stage5_fights_render_tail(s, p);
+	else if (s.stage_id == 4) stage5_fights_render_tail(s, p);
+	else if (s.stage_id == 5) stage6_fights_render_tail(s, p);
+	else extra_fights_render_tail(s);
 	if (s.stage_clear_requested) return StageResult::cleared;
 	if (s.playfield_shake_anim_time != 0) {
 		s.playfield_shake_x = (s.stage_frame & 1) == 0 ? -2 : 2;
@@ -74,23 +80,27 @@ StageResult stage_tick(State &s, std::uint16_t input, bool shift, Presentation &
 }
 bool stage_dialog_complete(State &s) noexcept
 {
-	if (!s.dialog_pending || s.stage_id > 4) return false;
+	if (!s.dialog_pending || s.stage_id > 6) return false;
 	s.dialog_pending = false;
 	if (s.stage_id == 0) stage1_boss_activate(s);
 	else if (s.stage_id == 1) stage2_boss_activate(s);
 	else if (s.stage_id == 2) stage3_boss_activate(s);
 	else if (s.stage_id == 3) stage4_boss_activate(s);
-	else stage5_boss_activate(s);
+	else if (s.stage_id == 4) stage5_boss_activate(s);
+	else if (s.stage_id == 5) stage6_boss_activate(s);
+	else extra_boss_activate(s);
 	return true;
 }
 bool stage_fights_setup(State &s) noexcept
 {
-	if (s.stage_id > 4) return false;
+	if (s.stage_id > 6) return false;
 	if (s.stage_id == 0) stage1_fights_setup(s);
 	else if (s.stage_id == 1) stage2_fights_setup(s);
 	else if (s.stage_id == 2) stage3_fights_setup(s);
 	else if (s.stage_id == 3) stage4_fights_setup(s);
-	else stage5_fights_setup(s);
+	else if (s.stage_id == 4) stage5_fights_setup(s);
+	else if (s.stage_id == 5) stage6_fights_setup(s);
+	else extra_fights_setup(s);
 	return true;
 }
 }

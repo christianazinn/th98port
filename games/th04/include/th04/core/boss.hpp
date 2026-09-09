@@ -100,6 +100,29 @@ enum class MarisaBitFire : std::uint8_t {
 	single = 2U,
 };
 
+// th04/main/boss/b6.cpp. The source records the last-completed parasol
+// animation in this BSS byte; its sparse values gate the phase patterns.
+enum class Yuuka6SpriteFlag : std::uint8_t {
+	vanished = 0U,
+	parasol_back_open = 1U,
+	parasol_back_closed = 2U,
+	parasol_forward = 3U,
+	parasol_left = 4U,
+	parasol_shield = 8U,
+};
+
+// th04/main/boss/bx1_pose.cpp. The original retains a near function pointer
+// for these three concrete Mugetsu pose/gather timelines.
+enum class ExtraMugetsuPose : std::uint8_t {
+	short_180bb = 0U,
+	medium_1812a = 1U,
+	long_1821e = 2U,
+};
+
+// th04/main/boss/bx2.hpp. The Extra Stage's only use of custom_entities is
+// sixteen column origins, seeded by Gengetsu's column-spawn pattern.
+inline constexpr std::size_t gengetsu_spawncolumn_count = 16U;
+
 struct MarisaBit {
 	MarisaBitFlag flag{MarisaBitFlag::free};
 	std::uint8_t angle{};
@@ -180,6 +203,30 @@ struct BossState {
 	std::int16_t yuuka5_spread_origin_x{};
 	std::uint8_t yuuka5_ring_rate{}, yuuka5_ring_accumulator{};
 	std::uint8_t yuuka5_palette_tone{};
+	// th04/main/boss/b6_upd.cpp, b6_next.cpp, and b6_fg.cpp. These are
+	// distinct source BSS globals and deliberately survive generic stage reset;
+	// their owning phase writes each transition value directly.
+	std::int16_t yuuka6_anim_frame{};
+	Yuuka6SpriteFlag yuuka6_sprite_flag{Yuuka6SpriteFlag::vanished};
+	std::uint8_t yuuka6_phase2_fly_path{};
+	std::uint8_t yuuka6_last_pattern{};
+	std::uint8_t yuuka6_aura_enabled{};
+	std::uint8_t yuuka6_mirror_state{};
+	Point yuuka6_mirror_pos{};
+	std::uint8_t yuuka6_mirror_damage{};
+	std::uint8_t yuuka6_damage_flash{}, yuuka6_mirror_damage_flash{};
+	// th04/main/boss/bx1_*.cpp, bx2_*.cpp, bx1_fg.cpp, fg.cpp, and shield.cpp.
+	// These source BSS controls survive generic stage reset; only the columns
+	// belong to custom_entities and are cleared with that source pool.
+	std::uint8_t extra_boss_bomb_immunity{};
+	ExtraMugetsuPose mugetsu_pose{ExtraMugetsuPose::short_180bb};
+	std::int16_t mugetsu_gather_frame_offset{16};
+	Point mugetsu_gather_center{};
+	std::uint8_t mugetsu_phase2_mode{}, mugetsu_damage_frames{};
+	std::uint8_t gengetsu_wave_amplitude{};
+	std::int16_t gengetsu_wave_target_x{};
+	std::uint8_t gengetsu_damage_frames{};
+	std::array<Point, gengetsu_spawncolumn_count> gengetsu_spawncolumns{};
 	bool operator==(const BossState &) const = default;
 };
 
@@ -223,6 +270,16 @@ void stage5_fights_setup(State &) noexcept;
 void stage5_boss_activate(State &) noexcept;
 [[nodiscard]] bool stage5_fights_update(State &, Presentation &) noexcept;
 void stage5_fights_render_tail(State &, Presentation &) noexcept;
+
+void stage6_fights_setup(State &) noexcept;
+void stage6_boss_activate(State &) noexcept;
+[[nodiscard]] bool stage6_fights_update(State &, Presentation &) noexcept;
+void stage6_fights_render_tail(State &, Presentation &) noexcept;
+
+void extra_fights_setup(State &) noexcept;
+void extra_boss_activate(State &) noexcept;
+[[nodiscard]] bool extra_fights_update(State &, Presentation &) noexcept;
+void extra_fights_render_tail(State &) noexcept;
 
 // The later midboss fights share the source shot collision and score-bonus
 // behavior, while keeping their own phase machines and source-local bytes.

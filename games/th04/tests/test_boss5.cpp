@@ -156,7 +156,7 @@ struct Trace final : Presentation {
 		state.boss.phase_state = 1U;
 		if(!stage5_fights_update(state, presentation) || state.boss.phase != 254U ||
 			state.boss.phase_frame != 0 || !state.bullets.zap.active() ||
-			state.score.score_delta != 76800U || presentation.pointnums.size() != 60U ||
+			state.score.score_delta != 11264U || presentation.pointnums.size() != 60U ||
 			state.player_invincibility_time != 255U || !state.boss_explosions.big.alive ||
 			presentation.sounds != std::vector<std::uint8_t>{15U, 12U}) return false;
 		state.boss.damage_this_frame = 1U;

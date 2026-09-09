@@ -10,6 +10,7 @@
 #include "th04/core/enemy.hpp"
 #include "th04/core/boss.hpp"
 #include "th04/core/thicklaser.hpp"
+#include "th04/core/b6ent.hpp"
 #include <array>
 #include <bit>
 #include <vector>
@@ -41,6 +42,7 @@ struct State {
 	bool midboss_active{};
 	MidbossState midboss{};
 	BossState boss{};
+	Yuuka6CustomState yuuka6_customs{};
 	CircleState circles{};
 	BossExplosionState boss_explosions{};
 	bool boss_active{}, stage_clear_requested{};

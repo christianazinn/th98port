@@ -32,7 +32,7 @@ try {
 		if (arg == "--help") {
 			std::cout << "TH04 partial headless core (not replay-validated)\n"
 				"--data DIR [--demo2 | --input FILE] [--frames N] [--rank 0..3]\n"
-				"[--character 0..1] [--shot 0..1] [--seed N] [--stage 1..5]\n"
+				"[--character 0..1] [--shot 0..1] [--seed N] [--stage 1..7 (7=Extra)]\n"
 				"Input: one original low-byte input mask per gameplay tick.\n"
 				"Stops explicitly at pause, dialog, Game Over or stage clear.\n";
 			return 0;
@@ -49,12 +49,12 @@ try {
 			if (!target || !number(value, *target)) throw std::runtime_error("Invalid option");
 		}
 	}
-	if (data.empty() || rank > 3 || character > 1 || shot > 1 || stage < 1 || stage > 5 ||
+	if (data.empty() || rank > 3 || character > 1 || shot > 1 || stage < 1 || stage > 7 ||
 		(demo && (!input_path.empty() || stage != 1)))
 		throw std::runtime_error("Invalid configuration; see --help");
 	th04::core::State s;
 	th04::core::Presentation p;
-	if (!th04::core::gameplay_init(s, static_cast<std::uint8_t>(rank),
+	if (!th04::core::gameplay_init(s, static_cast<std::uint8_t>(stage == 7 ? 4 : rank),
 		static_cast<std::uint8_t>(demo ? 1 : character),
 		static_cast<std::uint8_t>(demo ? 0 : shot), 3, 3, demo)) return 2;
 	s.random.seed = demo ? 318 : seed;

@@ -47,6 +47,16 @@ int main()
 	stage_init(s, p);
 	if (!stage_fights_setup(s) || s.midboss.frames_until != 60000) return 16;
 	s.stage_id = 5;
+	s.yuuka6_customs.chasecrosses[0].age = 42;
+	s.yuuka6_customs.safetycircle.radius_filled = 99;
+	stage_init(s, p);
+	if (s.yuuka6_customs.chasecrosses[0].age != 0 ||
+		s.yuuka6_customs.safetycircle.radius_filled != 0) return 17;
+	if (!stage_fights_setup(s) || s.midboss.frames_until != 60000) return 18;
+	s.stage_id = 6;
+	stage_init(s, p);
+	if (!stage_fights_setup(s) || s.midboss.frames_until != 5400) return 19;
+	s.stage_id = 7;
 	if (stage_fights_setup(s) || stage_tick(s, 0, false, p) != StageResult::unsupported) return 10;
 	std::cout << "Stage admission and explicit modal boundaries passed\n";
 }

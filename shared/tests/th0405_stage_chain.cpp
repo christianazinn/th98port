@@ -80,10 +80,19 @@ bool run(const std::filesystem::path &data, unsigned stages, bool extra)
 						<< " stage=" << unsigned(stage) << " frame=" << state.stage_frame
 						<< " boundary=" << static_cast<unsigned>(result)
 						<< " bossphase=" << unsigned(state.boss.phase)
+						<< " bossactive=" << state.boss_active
+						<< " bossframe=" << state.boss.phase_frame
+						<< " stdactive=" << state.std_data.active
+						<< " scrollspeed=" << unsigned(state.std_data.scroll_speed)
 						<< " midphase=" << unsigned(state.midboss.phase) << '\n';
 					return false;
 				}
-				const auto bonus = core::stage_clear_bonus(state, presentation);
+				// Exercise final-stage scoring too. This fixture deliberately visits
+				// every requested stage even on TH04 Easy (whose real route ends
+				// after Stage 5); it is not the game's full-session controller.
+				const auto bonus = stage >= 5
+					? core::stage_allclear_bonus(state, presentation)
+					: core::stage_clear_bonus(state, presentation);
 				for (unsigned tick = 0; state.score.score_delta != 0 && tick < 10000; ++tick)
 					core::score_update(state, presentation);
 				if (state.score.score_delta != 0) throw std::runtime_error("Score transfer did not finish");
