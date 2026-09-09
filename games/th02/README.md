@@ -1,9 +1,10 @@
 # TH02 native core (partial)
 
 This is an asset-free, partial deterministic core, not a playable game or a
-replay verifier. `core/stage1_run.hpp` now drives the implemented first-stage
-gameplay passes, pauses at an explicit UI boundary, and executes Rika's intro
-and ending. Asset loading, the replay/demo input adapter, remaining stages,
+replay verifier. The Stage1-5 drivers connect implemented gameplay passes,
+pause at explicit UI boundaries, and execute boss intros/endings (including
+Mima's form change and MAINE handoff). Asset loading, the replay/demo input
+adapter, Extra,
 and actual graphics/audio output are still separate dependencies. Community
 replay validation is pending recordings.
 

@@ -125,4 +125,15 @@ bool stage1_setup_items_and_score(Stage1State &state,
 	return score_extend_init(state.score);
 }
 
+bool stage5_setup_before_assets(StageState &state, bool demo,
+	Stage1SetupPresentation &presentation) noexcept
+{ return state.stage_id == 4U && stage_setup_before_assets(state, demo, presentation); }
+
+void stage5_setup_after_assets(StageState &state, Stage1FrameSchedule &schedule,
+	bool &stage_title_enabled) noexcept
+{
+	stage1_setup_after_assets(state, schedule, stage_title_enabled);
+	state.scroll.interval = 1;
+}
+
 } // namespace th02::core

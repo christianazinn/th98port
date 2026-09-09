@@ -12,7 +12,7 @@ Stage1RunWait frame_result(Stage1State &state, Stage4RunState &run,
 	case Stage1FramePhase::quit: run.phase = Stage1RunPhase::quit; break;
 	case Stage1FramePhase::boss_init_pending:
 		run.phase = Stage1RunPhase::intro;
-		if (stage4_intro_begin(state, run.intro, presentation.intro) == Stage1IntroWait::refused)
+		if (boss_intro_begin(state, run.intro, presentation.intro) == Stage1IntroWait::refused)
 			run.phase = Stage1RunPhase::refused;
 		break;
 	case Stage1FramePhase::stage_end_pending:
@@ -29,8 +29,8 @@ Stage1RunWait lifecycle_result(Stage1State &state, Stage4RunState &run,
 	Stage4RunPresentation &presentation) noexcept
 {
 	if (run.phase == Stage1RunPhase::intro) {
-		if (run.intro.phase == Stage4IntroPhase::refused) run.phase = Stage1RunPhase::refused;
-		else if (run.intro.phase == Stage4IntroPhase::complete) {
+		if (run.intro.phase == BossIntroPhase::refused) run.phase = Stage1RunPhase::refused;
+		else if (run.intro.phase == BossIntroPhase::complete) {
 			(void)stage1_frame_after_boss_init(state, run.frame, presentation.frame);
 			return frame_result(state, run, presentation);
 		}
@@ -56,7 +56,7 @@ Stage1RunWait stage4_run_wait(const Stage4RunState &run) noexcept
 	case Stage1RunPhase::quit: return Stage1RunWait::quit;
 	case Stage1RunPhase::refused: return Stage1RunWait::refused;
 	case Stage1RunPhase::intro:
-		switch (stage4_intro_wait(run.intro)) {
+		switch (boss_intro_wait(run.intro)) {
 		case Stage1IntroWait::input_sample: return Stage1RunWait::input_sample;
 		case Stage1IntroWait::delay_one_frame: return Stage1RunWait::delay_one_frame;
 		case Stage1IntroWait::delay_two_frames: return Stage1RunWait::delay_two_frames;
@@ -100,7 +100,7 @@ Stage1RunWait stage4_run_input(Stage1State &state, Stage4RunState &run,
 	std::uint16_t input, Stage4RunPresentation &presentation) noexcept
 {
 	if (run.phase == Stage1RunPhase::intro) {
-		(void)stage4_intro_input(state, run.intro, input, presentation.intro);
+		(void)boss_intro_input(state, run.intro, input, presentation.intro);
 		return lifecycle_result(state, run, presentation);
 	}
 	if (run.phase == Stage1RunPhase::ending) {
@@ -131,7 +131,7 @@ Stage1RunWait stage4_run_after_delay(Stage1State &state, Stage4RunState &run,
 	Stage4RunPresentation &presentation) noexcept
 {
 	if (run.phase == Stage1RunPhase::intro)
-		(void)stage4_intro_after_delay(state, run.intro, presentation.intro);
+		(void)boss_intro_after_delay(state, run.intro, presentation.intro);
 	else if (run.phase == Stage1RunPhase::ending)
 		(void)stage1_end_after_delay(state, run.ending, presentation.ending);
 	return lifecycle_result(state, run, presentation);
@@ -141,7 +141,7 @@ Stage1RunWait stage4_run_acknowledgement(Stage1State &state, Stage4RunState &run
 	bool pressed, Stage4RunPresentation &presentation) noexcept
 {
 	if (run.phase == Stage1RunPhase::intro)
-		(void)stage4_intro_acknowledgement(state, run.intro, pressed, presentation.intro);
+		(void)boss_intro_acknowledgement(state, run.intro, pressed, presentation.intro);
 	else if (run.phase == Stage1RunPhase::ending)
 		(void)stage1_end_acknowledgement(state, run.ending, pressed, presentation.ending);
 	return lifecycle_result(state, run, presentation);

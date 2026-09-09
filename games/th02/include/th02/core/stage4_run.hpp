@@ -4,14 +4,14 @@
 #include "th02/core/stage4_prepare.hpp"
 #include "th02/core/stage4_entities.hpp"
 #include "th02/core/stage1_frame.hpp"
-#include "th02/core/stage4_intro.hpp"
+#include "th02/core/boss_intro.hpp"
 #include "th02/core/stage1_end.hpp"
 
 namespace th02::core {
 struct Stage4RunState {
 	Stage1RunPhase phase{Stage1RunPhase::not_started};
 	Stage1FrameSchedule frame{};
-	Stage4IntroState intro{};
+	BossIntroState intro{};
 	Stage1EndState ending{};
 	bool stage_title_enabled{true};
 	bool demo{};
@@ -28,7 +28,7 @@ struct Stage4RunPresentation {
 	BombPresentationCallbacks &bomb;
 	Stage4EntitiesPresentation &entities;
 	Stage1FramePresentation &frame;
-	Stage4IntroPresentation &intro;
+	BossIntroPresentation &intro;
 	Stage1EndPresentation &ending;
 };
 

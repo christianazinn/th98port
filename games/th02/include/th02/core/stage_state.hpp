@@ -7,6 +7,7 @@
 #include "th02/core/midboss3.hpp"
 #include "th02/core/midboss4.hpp"
 #include "th02/core/marisa.hpp"
+#include "th02/core/mima.hpp"
 #include "th02/core/bg_particle.hpp"
 #include "th02/core/stones.hpp"
 #include "th02/core/stage3_effect.hpp"
@@ -69,6 +70,7 @@ struct StageState {
 	Midboss3State midboss3{};
 	Midboss4State midboss4{};
 	MarisaState marisa{};
+	MimaState mima{};
 	BgParticleState background_particles{};
 	std::int16_t stage4_tile_top{};
 	StonesState stones{};
@@ -91,6 +93,7 @@ struct StageState {
 	// Stage-loop/resident scalar owners. `resident_frame` is the signed source
 	// long, while `stage_frame` is the distinct unsigned source dword.
 	std::int32_t resident_frame{};
+	std::int32_t resident_score_highest{};
 	std::uint32_t stage_frame{};
 	std::uint16_t input{};
 	std::int8_t rank{};

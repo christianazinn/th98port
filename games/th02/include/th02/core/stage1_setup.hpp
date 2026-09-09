@@ -34,6 +34,10 @@ void gameplay_options_apply(Stage1State &state, bool reduce_effects,
 	Stage1SetupPresentation &presentation) noexcept;
 void stage4_setup_after_assets(StageState &state, Stage1FrameSchedule &schedule,
 	bool &stage_title_enabled) noexcept;
+[[nodiscard]] bool stage5_setup_before_assets(StageState &state, bool demo,
+	Stage1SetupPresentation &presentation) noexcept;
+void stage5_setup_after_assets(StageState &state, Stage1FrameSchedule &schedule,
+	bool &stage_title_enabled) noexcept;
 
 // Call after actual stage assets/map/script/dialogue loading and tiles reset.
 // Installs Stage1's represented callbacks and resets only the source player

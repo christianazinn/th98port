@@ -1,4 +1,4 @@
-#include "th02/core/stage4_intro.hpp"
+#include "th02/core/boss_intro.hpp"
 #include "th02/core/stage_state.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -8,7 +8,7 @@ using namespace th02::core;
 namespace {
 void require(bool value, std::source_location at = std::source_location::current())
 { if (!value) { std::fprintf(stderr, "stage4 intro: %u\n", at.line()); std::abort(); } }
-struct Sink final : Stage4IntroPresentation {
+struct Sink final : BossIntroPresentation {
 	std::vector<int> faces, rings, erased, music;
 	bool first{};
 	unsigned updates{};
@@ -45,18 +45,18 @@ int main()
 	s.stage_frame = 123; s.resident_frame = 456; s.marisa.defeat_frame = 17;
 	s.score.score_delta = 10;
 	const auto random = s.random;
-	Sink p; Stage4IntroState i;
-	auto wait = stage4_intro_begin(s, i, p);
+	Sink p; BossIntroState i;
+	auto wait = boss_intro_begin(s, i, p);
 	unsigned calls = 0, samples = 0, delays = 0;
 	while (wait != Stage1IntroWait::complete) {
 		require(++calls < 4000);
 		switch (wait) {
-		case Stage1IntroWait::delay_one_frame: ++delays; wait = stage4_intro_after_delay(s, i, p); break;
-		case Stage1IntroWait::delay_two_frames: delays += 2; wait = stage4_intro_after_delay(s, i, p); break;
-		case Stage1IntroWait::input_sample: ++samples; wait = stage4_intro_input(s, i, 16, p); break;
+		case Stage1IntroWait::delay_one_frame: ++delays; wait = boss_intro_after_delay(s, i, p); break;
+		case Stage1IntroWait::delay_two_frames: delays += 2; wait = boss_intro_after_delay(s, i, p); break;
+		case Stage1IntroWait::input_sample: ++samples; wait = boss_intro_input(s, i, 16, p); break;
 		case Stage1IntroWait::acknowledgement_first_sample:
 		case Stage1IntroWait::acknowledgement_second_sample:
-			wait = stage4_intro_acknowledgement(s, i, i.box.acknowledgement_released, p); break;
+			wait = boss_intro_acknowledgement(s, i, i.box.acknowledgement_released, p); break;
 		default: require(false);
 		}
 	}

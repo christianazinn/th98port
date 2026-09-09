@@ -7,6 +7,7 @@
 #include "th02/core/stage2_run.hpp"
 #include "th02/core/stage3_run.hpp"
 #include "th02/core/stage4_run.hpp"
+#include "th02/core/stage5_run.hpp"
 
 #include <cstdlib>
 #include <vector>
@@ -16,7 +17,7 @@ namespace {
 using namespace th02::core;
 
 class Trace final : public EnemyUpdateCallbacks, public RikaCallbacks,
-	public MeiraCallbacks, public Midboss2Callbacks, public StonesCallbacks, public MarisaCallbacks,
+	public MeiraCallbacks, public Midboss2Callbacks, public StonesCallbacks, public MarisaCallbacks, public MimaCallbacks,
 	public Midboss1Callbacks, public EnemyInvalidationCallbacks,
 	public PlayerFrameInvalidationCallbacks,
 	public LaserInvalidationCallbacks, public ItemScheduleCallbacks,
@@ -25,8 +26,17 @@ class Trace final : public EnemyUpdateCallbacks, public RikaCallbacks,
 	public ItemLifecyclePresentationCallbacks, public LaserUpdateCallbacks,
 	public EnemyBulletPresentationCallbacks, public Stage1PreparationPresentation,
 	public Stage1SetupPresentation, public Stage1FramePresentation, public TileInitialCallbacks,
-	public Stage1NotificationPresentation, public Stage4IntroPresentation, public Stage1EndPresentation {
+	public Stage1NotificationPresentation, public Stage5EndPresentation, public Stage1EndPresentation {
 public:
+	void grcg_line(ScreenPoint, ScreenPoint) noexcept override {}
+	void grcg_circle(ScreenPoint, std::int16_t) noexcept override {}
+	void grcg_circle_fill(ScreenPoint, std::int16_t) noexcept override {}
+	void dot_square_ring(ScreenPoint, std::uint8_t, std::uint8_t) noexcept override {}
+	void render_mima(MimaSprite) noexcept override {}
+	void render_mima_orb(MimaOrbSprite) noexcept override {}
+	void music_fade(std::uint8_t) noexcept override {}
+	void sound_effect_force(std::uint8_t) noexcept override {}
+	void load_second_form() noexcept override {}
 	unsigned sound_updates{};
 	unsigned intro_music_requests{};
 	void sound_effects_update() noexcept override { ++sound_updates; }
@@ -633,7 +643,7 @@ void set_valid_pages(Stage1State &state) noexcept
 	Stage3RunState run{};
 	Trace trace{};
 	auto old_invalidation = invalidation_presentation(trace);
-	Stage3InvalidationPresentation invalidation{trace, trace, trace, trace, old_invalidation.bullets, trace, trace, trace, trace};
+	Stage3InvalidationPresentation invalidation{static_cast<Stage1PreparationPresentation &>(trace), trace, trace, trace, old_invalidation.bullets, trace, trace, trace, trace};
 	Stage3EntitiesPresentation entities{trace, trace, trace, trace, trace, trace, trace};
 	Stage3RunPresentation presentation{trace, invalidation, trace, trace, trace,
 		entities, trace, trace, trace};
@@ -724,8 +734,8 @@ void set_valid_pages(Stage1State &state) noexcept
 {
 	StageState s; Stage4RunState run; Trace trace;
 	auto old = invalidation_presentation(trace);
-	Stage4InvalidationPresentation invalidation{trace, trace, trace, trace, old.bullets, trace, trace, trace, trace};
-	Stage4EntitiesPresentation entities{trace, trace, trace, static_cast<StonesCallbacks &>(trace), trace, trace, trace, trace, trace};
+	Stage4InvalidationPresentation invalidation{static_cast<Stage1PreparationPresentation &>(trace), trace, trace, trace, old.bullets, trace, trace, trace, trace};
+	Stage4EntitiesPresentation entities{trace, trace, trace, static_cast<StonesCallbacks &>(trace), static_cast<Stage1PreparationPresentation &>(trace), trace, trace, trace, trace};
 	Stage4RunPresentation p{trace, invalidation, trace, trace, trace, entities, trace, trace, trace};
 	s.stage_id = 3; s.max_enemy_vm_steps = 64;
 	if (!stage4_setup_before_assets(s, false, trace)) return false;
@@ -766,6 +776,55 @@ void set_valid_pages(Stage1State &state) noexcept
 	return stage4_run_wait(run) == Stage1RunWait::cleared && s.stage_id == 4 && s.stage_frame == 6 && s.dialog.box_current == 52;
 }
 
+[[nodiscard]] bool test_stage5_run_driver(bool continued) noexcept
+{
+	StageState s; Stage5RunState run; Trace trace;
+	auto old = invalidation_presentation(trace);
+	Stage5InvalidationPresentation invalidation{trace, trace, trace, old.bullets, trace, trace, trace, trace};
+	Stage5EntitiesPresentation entities{trace, trace, trace, trace, trace, trace};
+	Stage5RunPresentation p{trace, invalidation, trace, trace, trace, entities, trace, trace, trace};
+	s.stage_id = 4; s.continues_used = continued ? 1 : 0; s.max_enemy_vm_steps = 64;
+	if (!stage5_setup_before_assets(s, false, trace)) return false;
+	s.stage_data.map_length = 4;
+	tiles_stuff_reset(s.tiles, s.frame.page_back, s.tile_mode, s.tiles_egc_render_all);
+	stage5_setup_after_assets(s, run.frame, run.stage_title_enabled);
+	if (!stage1_setup_items_and_score(s, trace)) return false;
+	if (tiles_fill_and_put_initial(s.tiles, s.stage_data, s.tile_sections, trace) != TileScrollResult::completed) return false;
+	if (s.scroll.speed != 1 || s.scroll.interval != 1 || s.midboss_scroll_step != -1 || s.lasers_enabled) return false;
+	if (stage5_run_prepare(s, run, p) != Stage1RunWait::input_sample) return false;
+	if (stage5_run_input(s, run, 0x40, p) != Stage1RunWait::paused || s.stage_frame != 0) return false;
+	if (stage5_run_after_pause(s, run, false, p) != Stage1RunWait::ready_for_frame) return false;
+	s.scroll.done = true;
+	if (stage5_run_prepare(s, run, p) != Stage1RunWait::input_sample) return false;
+	if (stage5_run_input(s, run, 0, p) != Stage1RunWait::delay_one_frame) return false;
+	const auto finish = [&]() {
+		for (unsigned call = 0; call < 4000; ++call) {
+			const auto wait = stage5_run_wait(run);
+			if (wait == Stage1RunWait::ready_for_frame || wait == Stage1RunWait::maine) return true;
+			if (wait == Stage1RunWait::delay_one_frame || wait == Stage1RunWait::delay_two_frames)
+				(void)stage5_run_after_delay(s, run, p);
+			else if (wait == Stage1RunWait::input_sample) (void)stage5_run_input(s, run, 16, p);
+			else if (wait == Stage1RunWait::acknowledgement_first_sample || wait == Stage1RunWait::acknowledgement_second_sample)
+				(void)stage5_run_acknowledgement(s, run, run.phase == Stage5RunPhase::intro ?
+					run.intro.box.acknowledgement_released : run.ending.box.acknowledgement_released, p);
+			else return false;
+		}
+		return false;
+	};
+	if (!finish() || s.dialog.box_current != 44 || s.stage_frame != 2 || !s.boss_enabled) return false;
+	s.mima.phase = 8;
+	if (stage5_run_prepare(s, run, p) != Stage1RunWait::input_sample) return false;
+	if (stage5_run_input(s, run, 0, p) != Stage1RunWait::delay_one_frame || run.phase != Stage5RunPhase::ending) return false;
+	if (s.stage_frame != 2 || !finish()) return false;
+	if (continued) return stage5_run_wait(run) == Stage1RunWait::maine && s.stage_frame == 2 && s.dialog.box_current == 49;
+	if (s.mima.phase != 9 || s.stage_frame != 3 || s.dialog.box_current != 53) return false;
+	s.mima.phase = 10;
+	if (stage5_run_prepare(s, run, p) != Stage1RunWait::input_sample) return false;
+	if (stage5_run_input(s, run, 0, p) != Stage1RunWait::input_sample || run.phase != Stage5RunPhase::ending) return false;
+	if (!finish()) return false;
+	return stage5_run_wait(run) == Stage1RunWait::maine && s.stage_frame == 3 && s.stage_id == 4 && s.dialog.box_current == 57;
+}
+
 } // namespace
 
 int main()
@@ -789,6 +848,8 @@ int main()
 	CHECK_TEST(test_stage2_run_driver());
 	CHECK_TEST(test_stage3_run_driver());
 	CHECK_TEST(test_stage4_run_driver());
+	CHECK_TEST(test_stage5_run_driver(false));
+	CHECK_TEST(test_stage5_run_driver(true));
 	CHECK_TEST(test_run_early_quit_and_refusal());
 #undef CHECK_TEST
 	return EXIT_SUCCESS;

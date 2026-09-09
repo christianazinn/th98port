@@ -12,6 +12,7 @@ enum class Stage1RunPhase : std::uint8_t {
 enum class Stage1RunWait : std::uint8_t {
 	ready_for_frame, input_sample, paused, delay_one_frame, delay_two_frames,
 	acknowledgement_first_sample, acknowledgement_second_sample, cleared, quit, refused,
+	maine,
 };
 struct Stage1RunState {
 	Stage1RunPhase phase{Stage1RunPhase::not_started};
