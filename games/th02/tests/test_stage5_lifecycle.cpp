@@ -8,7 +8,7 @@ using namespace th02::core;
 namespace {
 void require(bool value, std::source_location at = std::source_location::current())
 { if (!value) { std::fprintf(stderr, "stage4 intro: %u\n", at.line()); std::abort(); } }
-struct Sink final : Stage5EndPresentation, EnemyBulletInvalidationCallbacks {
+struct Sink final : Stage5EndPresentation {
 	std::vector<int> faces, rings, erased, music;
 	bool first{};
 	unsigned updates{}, forced{}, second_form{};

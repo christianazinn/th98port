@@ -102,6 +102,24 @@ void stage_clear_bonus_calculate(
 	tally.bonus_delta = tally.total_x10 / 10;
 }
 
+void stage_extra_clear_bonus_calculate(const PlayerMissState &miss,
+	const BombState &bomb, const ItemLifecycleState &items, std::uint32_t sigma_frame,
+	StageClearBonusTally &tally) noexcept
+{
+	tally = {};
+	tally.row_values_x10[0] = 10000;
+	tally.row_values_x10[1] = nonnegative(word_subtract(20000, word_multiply(miss.stage_miss_count, 4000)));
+	tally.row_values_x10[2] = nonnegative(word_subtract(20000, word_multiply(bomb.stage_bombs_used, 4000)));
+	// Source assignment narrows the unsigned dword subtraction to a signed word
+	// before its nonnegative test and decimal rounding.
+	const auto frames = nonnegative(std::bit_cast<std::int16_t>(static_cast<std::uint16_t>(20000U - sigma_frame)));
+	tally.row_values_x10[3] = word_multiply(word_divide_trunc0(frames, 10), 10);
+	for (std::size_t row = 0; row < 4; ++row) sum_row(tally, row);
+	tally.sum_x10 = dword_multiply(tally.sum, 10);
+	tally.total_x10 = dword_multiply(tally.sum_x10, items.point_items_collected);
+	tally.bonus_delta = tally.total_x10 / 10;
+}
+
 StageClearBonusResult stage_clear_bonus_apply(
 	ScoreState &score, std::int8_t rank, const PlayerMissState &miss,
 	const BombState &bomb, const ItemLifecycleState &items,

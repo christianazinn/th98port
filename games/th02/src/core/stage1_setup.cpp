@@ -129,6 +129,17 @@ bool stage5_setup_before_assets(StageState &state, bool demo,
 	Stage1SetupPresentation &presentation) noexcept
 { return state.stage_id == 4U && stage_setup_before_assets(state, demo, presentation); }
 
+bool stage_extra_setup_before_assets(StageState &state, bool demo,
+	Stage1SetupPresentation &presentation) noexcept
+{ return state.stage_id == 5U && stage_setup_before_assets(state, demo, presentation); }
+
+void stage_extra_setup_after_assets(StageState &state, Stage1FrameSchedule &schedule,
+	bool &stage_title_enabled) noexcept
+{
+	stage1_setup_after_assets(state, schedule, stage_title_enabled);
+	state.scroll.interval = 2; state.lasers_enabled = true;
+}
+
 void stage5_setup_after_assets(StageState &state, Stage1FrameSchedule &schedule,
 	bool &stage_title_enabled) noexcept
 {

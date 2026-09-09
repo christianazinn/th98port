@@ -123,10 +123,34 @@ struct Fixture {
 	return true;
 }
 
+[[nodiscard]] bool test_extra_rows_and_timer_word() noexcept
+{
+	Fixture fixture{};
+	fixture.miss.stage_miss_count = 1;
+	fixture.bomb.stage_bombs_used = 2;
+	fixture.items.point_items_collected = 3;
+	StageClearBonusTally tally{};
+	stage_extra_clear_bonus_calculate(fixture.miss, fixture.bomb,
+		fixture.items, 1234U, tally);
+	if(tally.row_values_x10 != std::array<std::int16_t, 6U>{
+		10000, 16000, 12000, 18760, 0, 0} ||
+		tally.bonus_delta != 17028) return false;
+	stage_extra_clear_bonus_calculate(fixture.miss, fixture.bomb,
+		fixture.items, 20001U, tally);
+	if(tally.row_values_x10[3] != 0) return false;
+	stage_extra_clear_bonus_calculate(fixture.miss, fixture.bomb,
+		fixture.items, 65536U + 1234U, tally);
+	return tally.row_values_x10[3] == 18760;
+}
+
 } // namespace
 
 int main()
 {
+	if(!test_extra_rows_and_timer_word()) {
+		std::fputs("FAIL extra\n", stderr);
+		return EXIT_FAILURE;
+	}
 	if(!test_regular_rows_tally_and_real_score_grant()) {
 		std::fputs("FAIL regular\n", stderr);
 		return EXIT_FAILURE;

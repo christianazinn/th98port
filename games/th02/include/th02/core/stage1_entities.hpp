@@ -29,6 +29,7 @@ enum class StageEntitiesResult : std::uint8_t {
 	stones_refused,
 	marisa_refused,
 	mima_refused,
+	sigma_refused,
 	enemy_refused,
 	rika_refused,
 	meira_refused,

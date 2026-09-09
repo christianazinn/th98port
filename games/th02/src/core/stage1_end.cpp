@@ -14,6 +14,7 @@ constexpr std::array<std::uint8_t, 11> meira_faces{9, 54, 57, 9, 96, 150, 57, 96
 constexpr std::array<std::uint8_t, 3> stones_faces{12, 96, 12};
 constexpr std::array<std::uint8_t, 12> marisa_continued_faces{147, 0, 96, 0, 96, 54, 144, 144, 12, 96, 57, 144};
 constexpr std::array<std::uint8_t, 9> marisa_faces{147, 0, 96, 0, 96, 96, 57, 96, 57};
+constexpr std::array<std::uint8_t, 6> sigma_faces{9, 156, 9, 96, 96, 12};
 
 void acknowledgement_begin(Stage1EndState &end) noexcept
 {
@@ -40,9 +41,11 @@ void bonus_begin(Stage1State &state, Stage1EndState &end,
 	state.bomb_animation.palette_tone = 62;
 	presentation.palette_show();
 	presentation.bonus_title();
-	stage_clear_bonus_calculate(state.rank, state.player_miss, state.bomb,
+	if (end.boss == StageEndBoss::sigma) stage_extra_clear_bonus_calculate(state.player_miss,
+		state.bomb, state.item_lifecycle, state.sigma.frame, state.stage_clear_bonus);
+	else stage_clear_bonus_calculate(state.rank, state.player_miss, state.bomb,
 		state.item_lifecycle, state.start_lives, state.stage_clear_bonus);
-	for (std::uint8_t row = 0; row < 6; ++row)
+	for (std::uint8_t row = 0; row < (end.boss == StageEndBoss::sigma ? 4 : 6); ++row)
 		presentation.bonus_row(row, state.stage_clear_bonus.row_values_x10[row]);
 	presentation.bonus_total(state.stage_clear_bonus, state.item_lifecycle.point_items_collected);
 	state.score.score_delta = std::bit_cast<std::int32_t>(
@@ -62,7 +65,7 @@ void bonus_begin(Stage1State &state, Stage1EndState &end,
 Stage1EndWait advance(Stage1State &state, Stage1EndState &end,
 	Stage1EndPresentation &presentation) noexcept
 {
-	const std::span<const std::uint8_t> sequence = end.boss == StageEndBoss::marisa ?
+	const std::span<const std::uint8_t> sequence = end.boss == StageEndBoss::sigma ? std::span<const std::uint8_t>(sigma_faces) : end.boss == StageEndBoss::marisa ?
 		(state.continues_used != 0 ? std::span<const std::uint8_t>(marisa_continued_faces) : std::span<const std::uint8_t>(marisa_faces)) : end.boss == StageEndBoss::rika ?
 		std::span<const std::uint8_t>(faces) : end.boss == StageEndBoss::meira ?
 		std::span<const std::uint8_t>(meira_faces) : std::span<const std::uint8_t>(stones_faces);
@@ -164,6 +167,14 @@ Stage1EndWait stage1_end_after_delay(Stage1State &state, Stage1EndState &end,
 	return advance(state, end, presentation);
 }
 
+Stage1EndWait stage_extra_end_begin(StageState &state, Stage1EndState &end,
+	Stage1EndPresentation &presentation) noexcept
+{
+	end = {}; end.boss = StageEndBoss::sigma; end.phase = Stage1EndPhase::pre_slide;
+	(void)dialog_pre_begin(state, state.dialog, end.slide, presentation);
+	return advance(state, end, presentation);
+}
+
 Stage1EndWait stage2_end_begin(StageState &state, Stage1EndState &end,
 	Stage1EndPresentation &presentation) noexcept
 {
@@ -208,9 +219,14 @@ Stage1EndWait stage1_end_acknowledgement(Stage1State &state, Stage1EndState &end
 			end.acknowledgement = Stage1EndWait::acknowledgement_first_sample;
 			if (end.released && seen) {
 				if (end.phase == Stage1EndPhase::bonus_acknowledgement &&
-					(end.boss == StageEndBoss::rika || end.boss == StageEndBoss::meira)) {
+					(end.boss == StageEndBoss::rika || end.boss == StageEndBoss::meira || end.boss == StageEndBoss::sigma)) {
 					end.phase = Stage1EndPhase::end_acknowledgement;
 					acknowledgement_begin(end);
+				} else if (end.boss == StageEndBoss::sigma) {
+					end.resident_stage = 127;
+					end.resident_score_with_continues = std::bit_cast<std::int32_t>(
+						std::bit_cast<std::uint32_t>(state.score.score) * 10U + state.continues_used);
+					end.maine = true; end.phase = Stage1EndPhase::complete;
 				} else {
 					end.phase = Stage1EndPhase::leave_overlay;
 					end.overlay_frame = 0;

@@ -12,6 +12,7 @@ struct Sink final : BossIntroPresentation {
 	std::vector<int> faces, rings, erased, music;
 	bool first{};
 	unsigned updates{};
+	std::string_view track{"boss3.m"};
 	void scene(BossIntroScene scene, std::int16_t value, const StageState &) noexcept override {
 		if (scene == BossIntroScene::ring_put) rings.push_back(value);
 		if (scene == BossIntroScene::ring_erase) erased.push_back(value);
@@ -19,7 +20,7 @@ struct Sink final : BossIntroPresentation {
 	void sound_effect(std::uint8_t) noexcept override {}
 	void sound_effects_update() noexcept override { ++updates; }
 	void music_stop() noexcept override { music.push_back(1); }
-	void music_load(std::string_view name) noexcept override { require(name == "boss3.m"); music.push_back(2); }
+	void music_load(std::string_view name) noexcept override { require(name == track); music.push_back(2); }
 	void music_play() noexcept override { music.push_back(3); }
 	void boss_put(std::int16_t, std::int16_t, std::int16_t) noexcept override {}
 	void overlay_wipe() noexcept override {}
@@ -71,4 +72,29 @@ int main()
 	require(s.scroll.line == 0 && s.scroll.sad == 0 && s.bomb_animation.palette_tone == 100);
 	require(s.marisa.defeat_frame == 17 && s.marisa.topleft == ScreenPoint{176, 64});
 	require(s.boss.phase_frame == 0 && s.tile_mode == 2 && s.score.score == 10);
+
+	s = {}; p = {}; p.track = "boss5.m";
+	s.sigma.frame = 12345;
+	s.stage_frame = 123; s.resident_frame = 456;
+	wait = boss_intro_begin(s, i, p, BossIntroKind::sigma);
+	calls = samples = delays = 0;
+	while (wait != Stage1IntroWait::complete) {
+		require(++calls < 4000);
+		switch (wait) {
+		case Stage1IntroWait::delay_one_frame: ++delays; wait = boss_intro_after_delay(s, i, p); break;
+		case Stage1IntroWait::delay_two_frames: delays += 2; wait = boss_intro_after_delay(s, i, p); break;
+		case Stage1IntroWait::input_sample: ++samples; wait = boss_intro_input(s, i, 16, p); break;
+		case Stage1IntroWait::acknowledgement_first_sample:
+		case Stage1IntroWait::acknowledgement_second_sample:
+			wait = boss_intro_acknowledgement(s, i, i.box.acknowledgement_released, p); break;
+		default: require(false);
+		}
+	}
+	// Reset, pre/post slides, two 18-frame fades, and four ack frames per box.
+	require(delays == 1 + 23 + 24 + 36 + 25 * 4 && samples == 25 * 38);
+	require(p.rings.empty() && p.erased.empty());
+	require(p.music == std::vector<int>({1, 2, 3}));
+	require(s.dialog.box_current == 25 && s.sigma.frame == 12345);
+	require(s.stage_frame == 123 && s.resident_frame == 456);
+	require(s.sigma.topleft == ScreenPoint{160, 48} && s.tile_mode == 2);
 }

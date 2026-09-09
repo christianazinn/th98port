@@ -6,8 +6,10 @@
 #include "th02/core/midboss2.hpp"
 #include "th02/core/midboss3.hpp"
 #include "th02/core/midboss4.hpp"
+#include "th02/core/midbossx.hpp"
 #include "th02/core/marisa.hpp"
 #include "th02/core/mima.hpp"
+#include "th02/core/sigma.hpp"
 #include "th02/core/bg_particle.hpp"
 #include "th02/core/stones.hpp"
 #include "th02/core/stage3_effect.hpp"
@@ -69,8 +71,10 @@ struct StageState {
 	Midboss2State midboss2{};
 	Midboss3State midboss3{};
 	Midboss4State midboss4{};
+	MidbossxState midbossx{};
 	MarisaState marisa{};
 	MimaState mima{};
+	SigmaState sigma{};
 	BgParticleState background_particles{};
 	std::int16_t stage4_tile_top{};
 	StonesState stones{};

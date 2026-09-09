@@ -3,6 +3,7 @@
 #include "th02/core/stage3_prepare.hpp"
 #include "th02/core/stage4_prepare.hpp"
 #include "th02/core/stage5_prepare.hpp"
+#include "th02/core/stage_extra_prepare.hpp"
 #include <bit>
 
 namespace th02::core::detail {
@@ -16,7 +17,8 @@ Stage1PreparationResult stage_prepare(StageState &state, Invalidation &invalidat
 		return Stage1PreparationResult::invalid_page;
 	state.scroll.line = state.scroll_line_on_page[state.frame.page_back];
 	Stage1InvalidationResult invalidated;
-	if constexpr (Stage == 4) invalidated = stage5_invalidate(state, invalidation);
+	if constexpr (Stage == 5) invalidated = stage_extra_invalidate(state, invalidation);
+	else if constexpr (Stage == 4) invalidated = stage5_invalidate(state, invalidation);
 	else if constexpr (Stage == 3) invalidated = stage4_invalidate(state, invalidation);
 	else if constexpr (Stage == 2) invalidated = stage3_invalidate(state, invalidation);
 	else if constexpr (Stage == 1) invalidated = stage2_invalidate(state, invalidation);
@@ -47,7 +49,7 @@ Stage1PreparationResult stage_prepare(StageState &state, Invalidation &invalidat
 	presentation.tiles_render(state);
 	state.tiles_egc_render_all = false;
 	StageSceneryResult scenery_result;
-	if constexpr (Stage == 4) {
+	if constexpr (Stage >= 4) {
 		scenery_result = StageSceneryResult::idle;
 	} else if constexpr (Stage == 3) {
 		scenery_result = StageSceneryResult::idle;

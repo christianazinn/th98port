@@ -8,6 +8,7 @@
 #include "th02/core/stage3_run.hpp"
 #include "th02/core/stage4_run.hpp"
 #include "th02/core/stage5_run.hpp"
+#include "th02/core/stage_extra_run.hpp"
 
 #include <cstdlib>
 #include <vector>
@@ -18,7 +19,7 @@ using namespace th02::core;
 
 class Trace final : public EnemyUpdateCallbacks, public RikaCallbacks,
 	public MeiraCallbacks, public Midboss2Callbacks, public StonesCallbacks, public MarisaCallbacks, public MimaCallbacks,
-	public Midboss1Callbacks, public EnemyInvalidationCallbacks,
+	public Midboss1Callbacks, public SigmaCallbacks, public MidbossxCallbacks, public EnemyInvalidationCallbacks,
 	public PlayerFrameInvalidationCallbacks,
 	public LaserInvalidationCallbacks, public ItemScheduleCallbacks,
 	public SparkInvalidationCallbacks, public BombAnimationCallbacks,
@@ -28,6 +29,10 @@ class Trace final : public EnemyUpdateCallbacks, public RikaCallbacks,
 	public Stage1SetupPresentation, public Stage1FramePresentation, public TileInitialCallbacks,
 	public Stage1NotificationPresentation, public Stage5EndPresentation, public Stage1EndPresentation {
 public:
+	void grcg_vline(std::int16_t, std::int16_t, std::int16_t) noexcept override {}
+	void grcg_bytebox_fill(std::uint8_t, std::int16_t, std::uint8_t, std::int16_t) noexcept override {}
+	void render_sigma(SigmaSprite) noexcept override {}
+	void render_sigma_blast(SigmaBlastSprite) noexcept override {}
 	void grcg_line(ScreenPoint, ScreenPoint) noexcept override {}
 	void grcg_circle(ScreenPoint, std::int16_t) noexcept override {}
 	void grcg_circle_fill(ScreenPoint, std::int16_t) noexcept override {}
@@ -825,11 +830,55 @@ void set_valid_pages(Stage1State &state) noexcept
 	return stage5_run_wait(run) == Stage1RunWait::maine && s.stage_frame == 3 && s.stage_id == 4 && s.dialog.box_current == 57;
 }
 
+[[nodiscard]] bool test_extra_run_driver() noexcept
+{
+	StageState s; StageExtraRunState run; Trace trace;
+	auto old = invalidation_presentation(trace);
+	StageExtraInvalidationPresentation invalidation{trace, trace, trace, old.bullets, trace, trace, trace, trace};
+	StageExtraEntitiesPresentation entities{trace, trace, trace, trace, trace, trace, trace};
+	StageExtraRunPresentation p{trace, invalidation, trace, trace, trace, entities, trace, trace, trace};
+	s.stage_id = 5; s.max_enemy_vm_steps = 64;
+	if (!stage_extra_setup_before_assets(s, false, trace)) return false;
+	s.stage_data.map_length = 4;
+	tiles_stuff_reset(s.tiles, s.frame.page_back, s.tile_mode, s.tiles_egc_render_all);
+	stage_extra_setup_after_assets(s, run.frame, run.stage_title_enabled);
+	if (!stage1_setup_items_and_score(s, trace)) return false;
+	if (tiles_fill_and_put_initial(s.tiles, s.stage_data, s.tile_sections, trace) != TileScrollResult::completed) return false;
+	if (s.stage_id != 5 || s.scroll.speed != 1 || s.scroll.interval != 2 || s.midboss_scroll_step != 200 || !s.lasers_enabled) return false;
+	s.scroll.done = true;
+	if (stage_extra_run_prepare(s, run, p) != Stage1RunWait::input_sample) return false;
+	if (stage_extra_run_input(s, run, 0, p) != Stage1RunWait::delay_one_frame) return false;
+	const auto finish = [&]() {
+		for (unsigned call = 0; call < 4000; ++call) {
+			const auto wait = stage_extra_run_wait(run);
+			if (wait == Stage1RunWait::ready_for_frame || wait == Stage1RunWait::maine) return true;
+			if (wait == Stage1RunWait::delay_one_frame || wait == Stage1RunWait::delay_two_frames)
+				(void)stage_extra_run_after_delay(s, run, p);
+			else if (wait == Stage1RunWait::input_sample) (void)stage_extra_run_input(s, run, 16, p);
+			else if (wait == Stage1RunWait::acknowledgement_first_sample || wait == Stage1RunWait::acknowledgement_second_sample)
+				(void)stage_extra_run_acknowledgement(s, run, run.phase == Stage1RunPhase::intro ? run.intro.box.acknowledgement_released :
+					(run.ending.phase == Stage1EndPhase::boxes ? run.ending.box.acknowledgement_released : run.ending.released), p);
+			else return false;
+		}
+		return false;
+	};
+	if (!finish() || s.dialog.box_current != 25 || s.stage_frame != 1 || !s.boss_enabled) return false;
+	// Enter the final defeat frame; combat progression itself has separate tests.
+	s.boss.phase = 1; s.boss.phase_frame = 223;
+	if (stage_extra_run_prepare(s, run, p) != Stage1RunWait::input_sample) return false;
+	if (stage_extra_run_input(s, run, 0, p) != Stage1RunWait::delay_one_frame || run.phase != Stage1RunPhase::ending) return false;
+	if (!finish()) return false;
+	return stage_extra_run_wait(run) == Stage1RunWait::maine && s.stage_id == 5 && s.stage_frame == 2 &&
+		s.dialog.box_current == 31 && run.ending.resident_stage == 127 &&
+		run.ending.resident_score_with_continues == s.score.score * 10 + s.continues_used;
+}
+
 } // namespace
 
 int main()
 {
 #define CHECK_TEST(call) if (!(call)) { std::fprintf(stderr, "%s failed\n", #call); return EXIT_FAILURE; }
+	CHECK_TEST(test_extra_run_driver());
 	CHECK_TEST(test_invalidation_overload_borrows_one_state());
 	CHECK_TEST(test_stage2_invalidation_prefix());
 	CHECK_TEST(test_player_bomb_overload_uses_canonical_boss_and_frame());

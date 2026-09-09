@@ -4,7 +4,7 @@
 
 namespace th02::core {
 struct StageClearBonusTally;
-enum class StageEndBoss : std::uint8_t { rika, meira, stones, marisa };
+enum class StageEndBoss : std::uint8_t { rika, meira, stones, marisa, sigma };
 
 enum class Stage1EndPhase : std::uint8_t {
 	idle, pre_slide, boxes, bonus_acknowledgement, end_acknowledgement,
@@ -24,6 +24,10 @@ struct Stage1EndState {
 	bool released{};
 	bool pair_seen{};
 	std::uint8_t overlay_frame{};
+	// Sigma's terminal handoff replaces MAIN; it does not increment stage_id.
+	bool maine{};
+	std::int32_t resident_score_with_continues{};
+	std::uint8_t resident_stage{};
 };
 
 class Stage1EndPresentation : public DialogSlidePresentation, public DialogBoxPresentation {
@@ -48,6 +52,8 @@ public:
 [[nodiscard]] Stage1EndWait stage3_end_begin(StageState &state,
 	Stage1EndState &end, Stage1EndPresentation &presentation) noexcept;
 [[nodiscard]] Stage1EndWait stage4_end_begin(StageState &state,
+	Stage1EndState &end, Stage1EndPresentation &presentation) noexcept;
+[[nodiscard]] Stage1EndWait stage_extra_end_begin(StageState &state,
 	Stage1EndState &end, Stage1EndPresentation &presentation) noexcept;
 [[nodiscard]] Stage1EndWait stage1_end_after_delay(Stage1State &state,
 	Stage1EndState &end, Stage1EndPresentation &presentation) noexcept;

@@ -38,6 +38,9 @@ enum class StageClearBonusResult : std::uint8_t {
 void stage_clear_bonus_calculate(std::int8_t rank, const PlayerMissState &miss,
 	const BombState &bomb, const ItemLifecycleState &items,
 	std::uint8_t start_lives, StageClearBonusTally &tally) noexcept;
+void stage_extra_clear_bonus_calculate(const PlayerMissState &miss,
+	const BombState &bomb, const ItemLifecycleState &items, std::uint32_t sigma_frame,
+	StageClearBonusTally &tally) noexcept;
 
 // Deterministic arithmetic/state slice of
 // th02/main/stage/bonus.cpp::stage_clear_bonus_animate. This borrows the

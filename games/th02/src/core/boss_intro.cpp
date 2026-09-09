@@ -13,12 +13,16 @@ constexpr std::array<std::uint8_t, 22> continued_faces{
 	105, 57, 105, 6, 6, 105, 105, 6, 105, 6, 6, 96, 6, 105, 57, 105, 0, 96, 6, 6, 105, 105};
 constexpr std::array<std::uint8_t, 17> not_continued_faces{
 	105, 0, 105, 6, 105, 105, 105, 105, 105, 6, 105, 105, 105, 6, 6, 105, 105};
+constexpr std::array<std::uint8_t, 25> sigma_faces{
+	255, 0, 255, 153, 0, 153, 3, 153, 6, 153, 153, 153, 57,
+	153, 57, 153, 57, 153, 153, 57, 153, 12, 96, 12, 153};
 
 void begin_box(StageState &s, BossIntroState &i, BossIntroPresentation &p) noexcept
 {
 	i.phase = BossIntroPhase::boxes;
 	auto face = std::uint8_t{105};
 	if (i.kind == BossIntroKind::marisa) face = faces[i.sequence_index];
+	else if (i.kind == BossIntroKind::sigma) face = sigma_faces[i.sequence_index];
 	else if (i.sequence_index < 4) face = (i.sequence_index & 1) == 0 ? 6 : 105;
 	else if (s.continues_used && i.sequence_index < 26) face = continued_faces[i.sequence_index - 4];
 	else if (!s.continues_used && i.sequence_index < 21) face = not_continued_faces[i.sequence_index - 4];
@@ -28,11 +32,23 @@ void begin_box(StageState &s, BossIntroState &i, BossIntroPresentation &p) noexc
 Stage1IntroWait advance(StageState &s, BossIntroState &i, BossIntroPresentation &p) noexcept
 {
 	if (i.phase == BossIntroPhase::pre_slide && i.slide.phase == DialogSlidePhase::complete) {
-		p.scene(BossIntroScene::load_portrait, 0, s);
+		p.scene(i.kind == BossIntroKind::sigma ? BossIntroScene::load_sigma : BossIntroScene::load_portrait, 0, s);
 		begin_box(s, i, p);
 	} else if (i.phase == BossIntroPhase::boxes && i.box.phase == DialogBoxPhase::complete) {
 		++i.sequence_index;
-		if (i.kind == BossIntroKind::mima) {
+		if (i.kind == BossIntroKind::sigma) {
+			if (i.sequence_index == 3) {
+				sigma_combat_reset(s);
+				if (bullets_clear(s.bullets, s.frame.page_back, s.frame.page_front, p) != EnemyBulletLifecycleResult::completed) {
+					i.phase = BossIntroPhase::refused; return Stage1IntroWait::refused;
+				}
+				shots_free_all(s.player_shots);
+				palette_white_fade_begin(i.fade, PaletteWhiteFadeDirection::out, 1, s.bomb_animation.palette_tone);
+				i.phase = BossIntroPhase::white_out;
+			} else if (i.sequence_index == sigma_faces.size()) {
+				(void)dialog_post_begin(s, i.slide, p); i.phase = BossIntroPhase::post_slide;
+			} else begin_box(s, i, p);
+		} else if (i.kind == BossIntroKind::mima) {
 			if (i.sequence_index == 2) {
 				i.remaining = 10; i.phase = BossIntroPhase::entrance_wait;
 			} else if (i.sequence_index == (s.continues_used ? 26 : 21)) {
@@ -66,18 +82,28 @@ Stage1IntroWait advance(StageState &s, BossIntroState &i, BossIntroPresentation 
 			i.phase = BossIntroPhase::complete;
 		} else begin_box(s, i, p);
 	} else if (i.phase == BossIntroPhase::white_out && i.fade.phase == PaletteWhiteFadePhase::complete) {
-		p.scene(BossIntroScene::clear_page, -1, s);
-		p.scene(i.kind == BossIntroKind::mima ? BossIntroScene::mima_and_player : BossIntroScene::marisa_and_player, 0, s);
-		p.sound_effect(10); p.sound_effects_update(); p.scene(BossIntroScene::background_rows, 0, s);
+		if (i.kind == BossIntroKind::sigma) {
+			p.scene(BossIntroScene::sigma_put, 0, s);
+			p.music_stop(); p.music_load("boss5.m"); p.music_play();
+		} else {
+			p.scene(BossIntroScene::clear_page, -1, s);
+			p.scene(i.kind == BossIntroKind::mima ? BossIntroScene::mima_and_player : BossIntroScene::marisa_and_player, 0, s);
+			p.sound_effect(10); p.sound_effects_update(); p.scene(BossIntroScene::background_rows, 0, s);
+		}
 		palette_white_fade_begin(i.fade, PaletteWhiteFadeDirection::in, i.kind == BossIntroKind::mima ? 3 : 1, s.bomb_animation.palette_tone);
 		i.phase = BossIntroPhase::white_in;
 	} else if (i.phase == BossIntroPhase::white_in && i.fade.phase == PaletteWhiteFadePhase::complete) {
-		p.music_stop(); p.music_load(i.kind == BossIntroKind::mima ? "mima.m" : "boss3.m"); p.music_play(); begin_box(s, i, p);
+		if (i.kind != BossIntroKind::sigma) {
+			p.music_stop(); p.music_load(i.kind == BossIntroKind::mima ? "mima.m" : "boss3.m"); p.music_play();
+		}
+		begin_box(s, i, p);
 	} else if (i.phase == BossIntroPhase::post_slide && i.slide.phase == DialogSlidePhase::complete) {
-		mima_combat_reset(s);
-		p.page_access(s.frame.page_front); p.scene(BossIntroScene::clear_page, -1, s);
-		p.page_access(s.frame.page_back); p.scene(BossIntroScene::clear_page, -1, s);
-		p.scene(BossIntroScene::mima_side_columns, 11, s);
+		if (i.kind == BossIntroKind::mima) {
+			mima_combat_reset(s);
+			p.page_access(s.frame.page_front); p.scene(BossIntroScene::clear_page, -1, s);
+			p.page_access(s.frame.page_back); p.scene(BossIntroScene::clear_page, -1, s);
+			p.scene(BossIntroScene::mima_side_columns, 11, s);
+		}
 		i.phase = BossIntroPhase::complete;
 	}
 	if (i.slide.phase == DialogSlidePhase::score_refused || i.box.phase == DialogBoxPhase::invalid_text_reference)
@@ -121,6 +147,7 @@ Stage1IntroWait boss_intro_after_delay(StageState &s, BossIntroState &i, BossInt
 		s.frame.option_left_on_page[s.frame.page_back] = option;
 		s.frame.option_left_on_page[s.frame.page_front] = option;
 		p.player_put(s);
+		if (i.kind == BossIntroKind::sigma) s.tile_mode = 2;
 		(void)dialog_pre_begin(s, s.dialog, i.slide, p); i.phase = BossIntroPhase::pre_slide;
 	} else if (i.phase == BossIntroPhase::pre_slide || i.phase == BossIntroPhase::post_slide) {
 		(void)dialog_slide_after_delay(s, s.dialog, i.slide, p);
