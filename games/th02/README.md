@@ -450,3 +450,9 @@ available in `core/tile_scroll.hpp`, retaining the source's unused final row.
 `core/stage_continue.hpp` restores a continued player and clears bullets in
 source order without resetting the whole stage. Assets, dialogue and final
 presentation setup are still explicit dependencies, not successful no-op loads.
+
+`core/dialog.hpp` supplies the original box typing cadence, two-poll key
+acknowledgement, short-file text-buffer retention, and pre/post slide state.
+Delay requests are explicit rather than gameplay ticks: held input can type
+without waiting, while acknowledgement polls are separated by two frames.
+The enclosing boss script and actual text/sprite rasterization remain separate.
