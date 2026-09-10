@@ -405,3 +405,10 @@ The next honest increment is not "copy `pc98_*`". It is to decide TH01's
 renderer model (`W5A_TH01_PLAN.md` §8 already names it as W5a's single largest
 unknown for TH01), because `present::source_surface` is what the copied platform
 layer reaches for and it is the one module measured as not describing TH01.
+
+## Subsequent native gameplay additions (2026-09-09)
+
+The original copy measurements above are historical. `th01_core`, its native
+gameplay source list, strict floating-point options, and gameplay test entries
+are TH01-specific additions, not copied TH03 regions. The SDL scaffold remains
+outside the headless gameplay MVP.

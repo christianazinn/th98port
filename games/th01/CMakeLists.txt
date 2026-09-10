@@ -350,17 +350,38 @@ if(BUILD_TESTING)
 endif()
 
 add_library(th01_core STATIC src/core/input.cpp src/core/shots.cpp src/core/orb.cpp
-	src/core/shot_orb.cpp)
+	src/core/shot_orb.cpp src/core/player.cpp src/core/gameplay.cpp
+	src/core/projectiles.cpp src/core/stage.cpp src/core/boss.cpp src/core/boss_konngara.cpp
+	src/core/boss_mima.cpp src/core/boss_kikuri.cpp
+	src/core/boss_yuugenmagan.cpp src/core/boss_elis.cpp src/core/boss_sariel.cpp)
 target_include_directories(th01_core PUBLIC include)
 target_link_libraries(th01_core PUBLIC pc98_numeric)
 th01_set_warnings(th01_core)
+add_executable(th01-headless src/headless.cpp)
+target_link_libraries(th01-headless PRIVATE th01_core)
+th01_set_warnings(th01-headless)
 if(MSVC)
-	set_source_files_properties(src/core/orb.cpp PROPERTIES COMPILE_OPTIONS /fp:strict)
+	target_compile_options(th01_core PRIVATE /fp:strict)
 else()
-	set_source_files_properties(src/core/orb.cpp PROPERTIES
-		COMPILE_OPTIONS "-fno-fast-math;-ffp-contract=off;-frounding-math")
+	target_compile_options(th01_core PRIVATE -fno-fast-math -ffp-contract=off -frounding-math)
 endif()
 if(BUILD_TESTING)
+	th01_add_test(th01-player-tests SOURCES tests/test_player.cpp LINK th01_core)
+	th01_add_test(th01-gameplay-tests SOURCES tests/test_gameplay.cpp LINK th01_core)
+	th01_add_test(th01-boss-singyoku-tests SOURCES tests/test_boss_singyoku.cpp LINK th01_core)
+	th01_add_test(th01-boss-konngara-tests SOURCES tests/test_boss_konngara.cpp LINK th01_core)
+	th01_add_test(th01-boss-mima-tests SOURCES tests/test_boss_mima.cpp LINK th01_core)
+	th01_add_test(th01-boss-kikuri-tests SOURCES tests/test_boss_kikuri.cpp LINK th01_core)
+	th01_add_test(th01-boss-yuugenmagan-tests SOURCES tests/test_boss_yuugenmagan.cpp LINK th01_core)
+	th01_add_test(th01-boss-elis-tests SOURCES tests/test_boss_elis.cpp LINK th01_core)
+	th01_add_test(th01-boss-sariel-tests SOURCES tests/test_boss_sariel.cpp LINK th01_core)
+	add_test(NAME th01-headless-help COMMAND th01-headless --help)
+	th01_add_test(th01-projectile-tests SOURCES tests/test_projectiles.cpp LINK th01_core)
+	th01_add_test(th01-stage-tests SOURCES tests/test_stage.cpp LINK th01_core)
+	add_executable(th01-stage-sweep tests/stage_sweep.cpp)
+	target_link_libraries(th01-stage-sweep PRIVATE th01_core)
+	th01_set_warnings(th01-stage-sweep)
+	add_test(NAME th01-stage-sweep-help COMMAND th01-stage-sweep --help)
 	th01_add_test(th01-orb-vertical-tests
 		SOURCES tests/test_orb_vertical.cpp
 		LINK th01_core

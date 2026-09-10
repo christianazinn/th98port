@@ -41,6 +41,7 @@ struct ShotOrbState {
 	OrbVertical vertical{};
 	std::int16_t top{};
 	bool in_portal{};
+	std::int16_t prev_left{}, prev_top{}, rotation_frame{}, frames_outside_portal{};
 };
 
 enum class ShotOrbUpdateStatus : std::uint8_t {

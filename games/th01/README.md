@@ -2,11 +2,11 @@
 
 A partial native port of TH01 (*Highly Responsive to Prayers*).
 
-The asset-free `th01_core` now implements REIIDEN input sensing, player
-horizontal clamping, integer Orb helpers, shot spawn/pellet/boss collision
-helpers, and the CShots-to-Orb update composition with an ordered render trace.
-It uses shared master.lib IRAND. See
-`docs/CORE_FOUNDATIONS.md` for exact donor boundaries and missing gameplay.
+The headless `th01_core` implements REIIDEN's player and Orb, shots, pellets,
+lasers, cards, obstacles, items, timer, and source-ordered gameplay loop. All
+seven bosses are implemented across both routes. It uses shared
+master.lib IRAND and explicit source-width arithmetic. See
+`docs/CORE_FOUNDATIONS.md` for the API boundaries and validation limits.
 
 **Read `docs/COPY_DIFF.md` before adding anything.** The initial scaffolding
 was copied from `th03-port` under W5a step 3. That document records the copied
@@ -15,9 +15,8 @@ implementations have their own source contracts.
 
 ## What builds today
 
-The default configuration builds the partial core and VRAM libraries plus six
-tests: skeleton, core, Orb scalars, shot collisions, shot-Orb composition, and
-VRAM. Both compilers use warnings as errors:
+The default configuration builds the core, headless driver, VRAM library, and
+their tests. Both compilers use warnings as errors:
 
 ```
 cmake --preset gcc
@@ -28,6 +27,16 @@ cmake --preset msvc-x64
 cmake --build --preset msvc-x64
 ctest --preset msvc-x64
 ```
+
+`th01-headless --help` describes the raw six-key-group input driver. It loads
+stage data from the original `東方靈異.伝` archive supplied by the user and
+stops at explicit pause, life, route, and stage boundaries. It is not a replay
+reader. `th01-stage-sweep` exercises original stage data with synthetic input
+across both routes and all difficulties; matching compiler traces are not
+evidence of matching the PC-98 game.
+
+Presentation, audio, menus, process transitions, and replay admission/validation
+are separate follow-up work. No user replay parity is claimed.
 
 ## What does not build, and why that is recorded rather than fixed
 
