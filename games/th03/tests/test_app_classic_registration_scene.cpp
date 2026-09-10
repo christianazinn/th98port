@@ -1014,8 +1014,6 @@ void test_new_classic_registration_and_paged_viewer()
 		(*viewer)->raster().shown_page() == Page::zero &&
 		(*viewer)->raster().access_page() == Page::one,
 		"New Classic first ALL frame is complete on hidden page 1 before publication");
-	expect((*viewer)->raster().pixel(Page::one, {456, 112}) == 15U,
-		"New Classic local score-row character names use white, not blue");
 	expect((*viewer)->raster().pixel(Page::zero, {24, 320}) == 1U &&
 		(*viewer)->raster().pixel(Page::one, {24, 320}) == 15U &&
 		(*viewer)->raster().pixel(Page::one, {40, 320}) == 15U,
@@ -1045,6 +1043,15 @@ void test_new_classic_registration_and_paged_viewer()
 		(*viewer)->raster().access_page() == Page::zero &&
 		ClassicRegistrationSceneTestAccess::new_classic_page(**viewer) == 0U,
 		"Right redraws Reimu on hidden page 0 and publishes only at VSync");
+	std::size_t white_character_pixels = 0U;
+	std::size_t blue_character_pixels = 0U;
+	for(std::int32_t x = 456; x < 552; ++x) {
+		const auto pixel = (*viewer)->raster().pixel(Page::zero, {x, 112});
+		white_character_pixels += pixel == 15U ? 1U : 0U;
+		blue_character_pixels += pixel == 4U ? 1U : 0U;
+	}
+	expect(white_character_pixels != 0U && blue_character_pixels == 0U,
+		"New Classic local score-row character names use white, not blue");
 	expect((*viewer)->raster().pixel(Page::zero, {24, 320}) == 15U &&
 		(*viewer)->raster().pixel(Page::zero, {40, 320}) == 1U &&
 		(*viewer)->raster().pixel(Page::zero, {76, 320}) == 15U &&
