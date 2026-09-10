@@ -1317,7 +1317,7 @@ bool ClassicRegistrationScene::draw_row(std::size_t place) noexcept
 			{left, top + ((glyph_height - 16) / 2)},
 			*prepared_->playchars[row.playchar_optional],
 			{
-				.color = static_cast<present::Index4>(highlight ? 15U : 4U),
+				.color = 15U,
 				.weight = present::GraphicsTextWeight::bold,
 			}
 		)) {

@@ -832,9 +832,9 @@ void test_view_only_schedule_and_unchanged_board()
 		"viewer skips candidate insertion despite a synthetic winning last score"
 	);
 	expect(
-		(*scene)->raster().pixel(Page::zero, {456, 112}) == 4U &&
+		(*scene)->raster().pixel(Page::zero, {456, 112}) == 15U &&
 			(*scene)->raster().pixel(Page::one, {456, 112}) == 1U,
-		"view-only rows use the normal glyph sheet while backup retains background"
+		"Classic character names are white while backup retains background"
 	);
 	drain_initial_audio(**scene);
 	if(!advance_fade(**scene, ClassicRegistrationPhase::wait_release)) {
@@ -1014,6 +1014,8 @@ void test_new_classic_registration_and_paged_viewer()
 		(*viewer)->raster().shown_page() == Page::zero &&
 		(*viewer)->raster().access_page() == Page::one,
 		"New Classic first ALL frame is complete on hidden page 1 before publication");
+	expect((*viewer)->raster().pixel(Page::one, {456, 112}) == 15U,
+		"New Classic local score-row character names use white, not blue");
 	expect((*viewer)->raster().pixel(Page::zero, {24, 320}) == 1U &&
 		(*viewer)->raster().pixel(Page::one, {24, 320}) == 15U &&
 		(*viewer)->raster().pixel(Page::one, {40, 320}) == 15U,
