@@ -4148,6 +4148,24 @@ void test_recorded_pause_completion()
 	}
 }
 
+void test_deferred_exit_preempts_practice_retry_result()
+{
+	auto state = make_live_state();
+	state.game_mode = th03::game_mode::vs_1p_cpu;
+	state.practice_uses_stock = true;
+	state.defeat_flag = th03::detail::DefeatFlag::banner;
+	state.winner = 1;
+	state.story_lives = 2U;
+	state.result_transition_complete = true;
+	state.session_exit_requested = true;
+
+	th03::detail::gameplay_frame_suffix_after_interstitial(state, nullptr);
+	check(
+		state.story_lives == 1U && state.route == 0U && state.round_complete,
+		"a deferred Practice exit preserves loss bookkeeping but preempts its retry route"
+	);
+}
+
 void test_recorded_pause_prefix_bullet_once()
 {
 	auto init = base_game_init();
@@ -5518,6 +5536,7 @@ int main()
 	test_main_hud_mutation_sites();
 	test_main_hud_deferred_and_repeat_lifecycle();
 	test_recorded_pause_completion();
+	test_deferred_exit_preempts_practice_retry_result();
 	test_recorded_pause_prefix_bullet_once();
 	test_warning_completion();
 	test_warning_gauge_semantic_observation();

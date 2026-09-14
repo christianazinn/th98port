@@ -187,6 +187,7 @@ enum class NewClassicMenuBackground : std::uint8_t {
 struct NewClassicReplayPatchAssets final {
 	assets::PiImage replay_list_background{};
 	assets::PiImage replay_name_background{};
+	assets::PiImage key_config_background{};
 	std::array<
 		assets::PiImage,
 		static_cast<std::size_t>(NewClassicMenuBackground::count)

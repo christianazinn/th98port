@@ -16,6 +16,10 @@
 
 namespace th03 {
 
+namespace detail {
+struct GameTestAccess;
+}
+
 namespace game_mode {
 
 inline constexpr std::uint8_t none = 0x00U;
@@ -354,6 +358,7 @@ public:
 	std::expected<GameInit, Error> next_story_stage_init() const;
 
 private:
+	friend struct detail::GameTestAccess;
 	struct Impl;
 	Game(
 		GameInit init,

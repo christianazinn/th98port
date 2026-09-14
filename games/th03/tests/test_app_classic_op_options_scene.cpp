@@ -15,6 +15,7 @@
 
 #include "th03/app/content/authentic_text.hpp"
 #include "th03/app/content/resources.hpp"
+#include "th03/app/new_classic/beta_features.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/present/pi.hpp"
 #include "th03/present/source_surface.hpp"
@@ -797,6 +798,7 @@ void test_patch_option_japanese_language_and_shadow_if_assets_supplied()
 		"language switch redraws both the selected value and unselected Return row");
 	expect(scene->advance().has_value() &&
 		scene->advance({.right = true}).has_value() &&
+#if TH03_BETA_FEATURES
 		scene->config().language == ClassicLanguage::spanish_test,
 		"bundled Spanish test locale is a distinct third selector choice");
 	const auto spanish = scene->raster();
@@ -807,6 +809,10 @@ void test_patch_option_japanese_language_and_shadow_if_assets_supplied()
 		scene->advance({.right = true}).has_value() &&
 		scene->config().language == ClassicLanguage::japanese,
 		"language ring wraps Spanish back to Japanese");
+#else
+		scene->config().language == ClassicLanguage::japanese,
+		"default language ring skips the unavailable Spanish test locale");
+#endif
 	expect(return_row_hash(japanese) == return_row_hash(scene->raster()),
 		"Japanese redraw restores the unselected localized Return row exactly");
 }
@@ -833,12 +839,19 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 	expect(scene->advance().has_value(), "Gameplay Rank releases");
 	expect(scene->advance({.down = true}).has_value() &&
 		scene->advance().has_value() &&
+#if TH03_BETA_FEATURES
 		scene->selected_choice() == ClassicOpOptionsChoice::arrange,
 		"Gameplay navigation reaches the Arrange ruleset selector");
 	expect(scene->advance({.right = true}).has_value() &&
 		scene->resident().gameplay_ruleset == th03::dopamine_test_v1_ruleset,
 		"Gameplay Arrange selects the complete Dopamine test ruleset");
 	expect(scene->advance().has_value(), "Gameplay Arrange releases");
+#else
+		scene->selected_choice() == ClassicOpOptionsChoice::return_page,
+		"default Gameplay navigation skips the Arrange ruleset selector");
+	expect(th03::stock_gameplay_rules(scene->resident().gameplay_ruleset),
+		"default Gameplay remains on the Stock ruleset");
+#endif
 	expect(scene->advance({.cancel = true}).has_value() &&
 		scene->page() == ClassicOpOptionsPage::categories &&
 		scene->selected_choice() ==

@@ -1,4 +1,5 @@
 #include "th03/app/new_classic/persistence/new_classic_settings_store.hpp"
+#include "th03/app/new_classic/beta_features.hpp"
 
 #include <array>
 #include <atomic>
@@ -32,6 +33,21 @@ NewClassicSettingsStoreErrorCode code,
 		.system = system,
 		.codec = std::move(codec),
 	};
+}
+
+[[nodiscard]] constexpr NewClassicSettings available_settings(
+	NewClassicSettings settings
+) noexcept
+{
+#if !TH03_BETA_FEATURES
+	if(settings.options.language == ClassicLanguage::spanish_test) {
+		settings.options.language = ClassicLanguage::english;
+	}
+	if(settings.gameplay_ruleset == dopamine_test_v1_ruleset) {
+		settings.gameplay_ruleset = stock_gameplay_ruleset;
+	}
+#endif
+	return settings;
 }
 
 [[nodiscard]] std::filesystem::path temporary_path(
@@ -141,7 +157,8 @@ commit_new_classic_settings_store(
 			NewClassicSettingsStoreErrorCode::invalid_path
 		));
 	}
-	auto encoded = encode_new_classic_settings(settings);
+	const auto available = available_settings(settings);
+	auto encoded = encode_new_classic_settings(available);
 	if(!encoded) {
 		return std::unexpected(store_error(
 			NewClassicSettingsStoreErrorCode::codec, {}, encoded.error()
@@ -190,7 +207,7 @@ commit_new_classic_settings_store(
 		return std::unexpected(std::move(readback.error()));
 	}
 	auto decoded = decode_new_classic_settings(*readback);
-	if(*readback != *encoded || !decoded || *decoded != settings) {
+	if(*readback != *encoded || !decoded || *decoded != available) {
 		remove_ignoring_error(temporary);
 		return std::unexpected(store_error(
 			NewClassicSettingsStoreErrorCode::temporary_validation,
@@ -240,6 +257,7 @@ std::expected<
 			{}, valid.error()
 		));
 	}
+	defaults = available_settings(defaults);
 	std::error_code system;
 	const auto status = std::filesystem::status(path, system);
 	if(system == std::errc::no_such_file_or_directory ||
@@ -248,8 +266,8 @@ std::expected<
 		if(!migration) {
 			return std::unexpected(std::move(migration.error()));
 		}
-		const auto settings = migration->has_value() ?
-			new_classic_settings_from_classic(**migration) : defaults;
+		const auto settings = available_settings(migration->has_value() ?
+			new_classic_settings_from_classic(**migration) : defaults);
 		if(auto committed = commit_new_classic_settings_store(path, settings);
 			!committed) {
 			return std::unexpected(std::move(committed.error()));
@@ -289,6 +307,8 @@ std::expected<
 		}
 		auto decoded = decode_new_classic_settings(*bytes);
 		if(decoded) {
+			const auto settings = available_settings(*decoded);
+			const bool normalized = settings != *decoded;
 			const bool legacy_v4 =
 				std::to_integer<std::uint8_t>((*bytes)[7U]) ==
 					static_cast<std::uint8_t>('4');
@@ -301,14 +321,14 @@ std::expected<
 			const bool legacy_v7 =
 				std::to_integer<std::uint8_t>((*bytes)[7U]) ==
 					static_cast<std::uint8_t>('7');
-			if(legacy_v4 || legacy_v5 || legacy_v6 || legacy_v7) {
-				if(auto committed = commit_new_classic_settings_store(path, *decoded);
+			if(legacy_v4 || legacy_v5 || legacy_v6 || legacy_v7 || normalized) {
+				if(auto committed = commit_new_classic_settings_store(path, settings);
 					!committed) {
 					return std::unexpected(std::move(committed.error()));
 				}
 			}
 			return NewClassicSettingsStoreLoadResult{
-				.settings = *decoded,
+				.settings = settings,
 				.disposition = legacy_v4 ?
 					NewClassicSettingsStoreDisposition::upgraded_v4 :
 					(legacy_v5 ?
@@ -332,7 +352,8 @@ std::expected<
 		}
 		auto decoded = decode_new_classic_settings(*bytes);
 		if(decoded) {
-			if(auto committed = commit_new_classic_settings_store(path, *decoded);
+			const auto settings = available_settings(*decoded);
+			if(auto committed = commit_new_classic_settings_store(path, settings);
 				!committed) {
 				return std::unexpected(std::move(committed.error()));
 			}
@@ -340,7 +361,7 @@ std::expected<
 				std::to_integer<std::uint8_t>((*bytes)[7U]) ==
 				static_cast<std::uint8_t>('2');
 			return NewClassicSettingsStoreLoadResult{
-				.settings = *decoded,
+				.settings = settings,
 				.disposition = legacy_v2 ?
 					NewClassicSettingsStoreDisposition::upgraded_v2 :
 					NewClassicSettingsStoreDisposition::upgraded_v3,
@@ -358,12 +379,13 @@ std::expected<
 		}
 		auto decoded = decode_new_classic_settings(*bytes);
 		if(decoded) {
-			if(auto committed = commit_new_classic_settings_store(path, *decoded);
+			const auto settings = available_settings(*decoded);
+			if(auto committed = commit_new_classic_settings_store(path, settings);
 				!committed) {
 				return std::unexpected(std::move(committed.error()));
 			}
 			return NewClassicSettingsStoreLoadResult{
-				.settings = *decoded,
+				.settings = settings,
 				.disposition = NewClassicSettingsStoreDisposition::upgraded_v1,
 			};
 		}

@@ -1,4 +1,5 @@
 #include "th03/app/classic/classic_cli.hpp"
+#include "th03/app/new_classic/beta_features.hpp"
 
 #include <array>
 #include <charconv>
@@ -329,6 +330,11 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 		case ClassicCliOption::shell:
 			break;
 		case ClassicCliOption::arrange:
+#if !TH03_BETA_FEATURES
+			return std::unexpected(cli_error(
+				ClassicCliErrorCode::invalid_arrange, *option, value_index
+			));
+#else
 			if(value != gameplay_ruleset_name(dopamine_test_v1_ruleset)) {
 				return std::unexpected(cli_error(
 					ClassicCliErrorCode::invalid_arrange, *option, value_index
@@ -336,6 +342,7 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 			}
 			request.launch.gameplay_ruleset = dopamine_test_v1_ruleset;
 			break;
+#endif
 		}
 	}
 	if(request.show_help) {

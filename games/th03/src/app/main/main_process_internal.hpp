@@ -98,6 +98,13 @@ struct MainProcessTestAccess final {
 
 	static void feedback_dispatch_boundary(MainProcess &process) noexcept;
 
+	// Source-private bridge for Classic's route seam. It arms a live Practice
+	// GAME's real result-control loss path; the regular driver owns the fadeout,
+	// route-1 retry, and repeat-round presentation startup.
+	[[nodiscard]] static bool force_practice_loss_retry(
+		MainProcess &process
+	) noexcept;
+
 	[[nodiscard]] static std::expected<
 		std::shared_ptr<const MainProcessStaticContent>,
 		MainProcessError

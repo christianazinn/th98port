@@ -177,6 +177,27 @@ namespace {
 		rules.retry_cpu_damage == config.cpu_damage;
 }
 
+// V14's Practice configuration describes checkpoint 0. Source route-1 retries
+// carry the selected stage and retry rules, but advance the live round/life
+// state and recompute the rank-derived fields. validate_practice_anchor() in
+// the format reader deliberately has the same checkpoint-0-only boundary.
+[[nodiscard]] bool practice_retry_matches(
+	const formats::ReplayPracticeConfig &config,
+	const RoundStartObservation &observation
+) noexcept
+{
+	if(!observation.start.practice_rules) {
+		return false;
+	}
+	const auto &rules = *observation.start.practice_rules;
+	return observation.start.game_mode == game_mode::vs_1p_cpu &&
+		observation.start.story_stage == config.stage &&
+		observation.round.state.round_id > config.round &&
+		rules.uses_stock == (config.stock != 0xFFU) &&
+		rules.retry_cpu_timer == static_cast<CpuTimerPolicy>(config.cpu_timer) &&
+		rules.retry_cpu_damage == config.cpu_damage;
+}
+
 [[nodiscard]] formats::ReplayMetadata initial_metadata(
 	const GameInit &init,
 	std::uint16_t dos_date,
@@ -272,12 +293,16 @@ NewClassicReplayRecorder::round_started(
 		));
 	}
 	const bool practice = practice_config_.has_value();
+	const bool initial_checkpoint = !document_;
 	if(completed_ || !replay_game_mode(observation.start.game_mode) ||
 		observation.start.paletted_character[0U] < 1 ||
 		observation.start.paletted_character[1U] < 1 ||
 		observation.start.autofire_mask > 3U ||
 		observation.runtime.formation_type_ring[0U] == 0xFFU ||
-		(practice ? !practice_anchor_matches(*practice_config_, observation) :
+		(practice ?
+			(initial_checkpoint ?
+				!practice_anchor_matches(*practice_config_, observation) :
+				!practice_retry_matches(*practice_config_, observation)) :
 			observation.start.practice_rules.has_value()) ||
 		(practice && document_ && document_->checkpoints.size() >= 5U)) {
 		return std::unexpected(replay_error(

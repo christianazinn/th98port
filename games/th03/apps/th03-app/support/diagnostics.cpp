@@ -4,6 +4,7 @@
 #include <string>
 
 #include "th03/app/content/main_compiled_content.hpp"
+#include "th03/app/new_classic/beta_features.hpp"
 
 namespace th03::app::launcher_support {
 
@@ -23,7 +24,12 @@ void print_usage()
 			"[--rhythm-rom <YM2608.ROM> | --rhythm-pcm <T98RHYTHM.PCM>] "
 			"[--tick-rate <ticks>/<seconds>] "
 			"[--smoke-ticks n] [--capture-replay <V14.RPY> "
-			"[--capture-checkpoint n]] [--arrange dopamine-test-v1]\n"
+			"[--capture-checkpoint n]]"
+
+#if TH03_BETA_FEATURES
+			" [--arrange dopamine-test-v1]"
+#endif
+			"\n"
 		<< "   or: th03-app --vs --data <root> --main <MAIN.EXE> "
 			"--font <FONT.ROM>\n"
 		<< "       [--p1 <character[:first|second]>] "

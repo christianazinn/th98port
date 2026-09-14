@@ -112,6 +112,10 @@ pipeline produces one stable cache identity:
 tools\build_classic_standalone.ps1
 ```
 
+The default package disables experimental Spanish and Dopamine Arrange.
+Opt in with `-BetaFeatures`, which also selects `TH03_BETA_FEATURES=ON` for
+the native build. `-SkipNativeBuild` rejects a mismatched cached feature flag.
+
 With the standard ignored workspace layout, the stable result is
 `out\standalone\PoDD-Port-Test.exe`. It can be copied elsewhere and launched
 by double-clicking; it needs no adjacent DLL/content tree, installed .NET
@@ -131,7 +135,8 @@ scores, and the last-run diagnostic log live in the separate `user` directory
 there and survive artifact updates. New Classic V14 files instead live in a
 visible `REPLAY` directory beside the executable. A read-only installation
 falls back to `user\REPLAY`; `last-run.log` records the selected install and
-replay roots. The launcher retains only the current and one previous payload
+replay roots. A failed native run also writes `last-failed-run.log`; successful
+relaunches leave that report intact. The launcher retains only the current and one previous payload
 generation, so ordinary artifact refreshes do not accumulate an unbounded
 private cache.
 
@@ -225,8 +230,10 @@ out\build\msvc-x64-sdl\Debug\th03-app.exe `
 # Developer bypasses for one experience without normal startup/product flow:
 # replace --shell with --classic or --new-classic.
 
-# Experimental New Classic Arrange ruleset. The maintained standalone accepts
-# the same final two arguments directly after its executable name.
+# Experimental New Classic Arrange ruleset. Configure this explicit developer
+# build first; the maintained standalone uses the same gate through
+# `tools\build_classic_standalone.ps1 -BetaFeatures`.
+cmake --preset msvc-x64-sdl -DTH03_BETA_FEATURES=ON
 out\build\msvc-x64-sdl\Debug\th03-app.exe `
   --new-classic --arrange dopamine-test-v1 `
   --data X:\th03-extracted `
@@ -375,16 +382,20 @@ stream, so translated punctuation cannot become a command. See
 `th03-localized-scene-snapshot` drives the authenticated production scene and
 captures one longest-run layout-stress frame for each script with its real
 background and palette. See `docs/NEW_CLASSIC_LOCALIZED_SCENE_SNAPSHOTS.md`.
-The developer-only Dopamine Arrange prototype is selected in New Classic at
-`Option -> Gameplay -> Arrange -> Dopamine`. The selection is persisted in
-`PODD.CFG`; `--new-classic --arrange dopamine-test-v1` remains available for
-deterministic developer launches and explicit command-line overrides. Its title is
-visibly marked, every formation is the downward-pointing triangle, CPU gauge
-attacks stop at level 2, and spell cut-ins do not suspend gameplay. It keeps
-New Classic input, Pause, audio, language, and presentation settings, but
-recording, replay playback, online submission, netplay, Practice, automatic
-demos, and score persistence fail closed until a future format binds a ruleset
-identity. Sealed Classic and ordinary New Classic remain stock.
+The developer-only Dopamine Arrange prototype is available only from a build
+configured with `-DTH03_BETA_FEATURES=ON`. That explicit build exposes New
+Classic's `Option -> Gameplay -> Arrange -> Dopamine` selection and accepts
+`--new-classic --arrange dopamine-test-v1`; normal builds hide both. Normal
+builds also rewrite stale persisted Dopamine/Spanish-test selections to Stock
+and English, so a hidden feature cannot reactivate after an update. The raw
+settings codec and explicit renderer replay handling retain their existing
+versioned compatibility. Its title is visibly marked, every formation is the
+downward-pointing triangle, CPU gauge attacks stop at level 2, and spell cut-ins
+do not suspend gameplay. It keeps New Classic input, Pause, audio, language,
+and presentation settings, but recording, replay playback, online submission,
+netplay, Practice, automatic demos, and score persistence fail closed until a
+future format binds a ruleset identity. Sealed Classic and ordinary New Classic
+remain stock.
 New Classic also owns the Replay Patch's versioned per-character HiScore file.
 Its viewer opens on `ALL CHARACTERS`, cycles through the unlocked character
 pages with Left/Right, appends the derived TOTAL row, and shows play time, 1CC,

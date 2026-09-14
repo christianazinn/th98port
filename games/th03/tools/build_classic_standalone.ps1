@@ -18,6 +18,7 @@ param(
 	[string]$T98Sound86,
 	[string]$ReplayExtensionProviderSource,
 	[string]$Output,
+	[switch]$BetaFeatures,
 	[switch]$SkipNativeBuild,
 	[switch]$SkipSmoke
 )
@@ -275,6 +276,7 @@ foreach($archiveDirectory in @("YUME1.DAT", "YUME2.DAT")) {
 }
 
 $buildRoot = Join-Path $sourceRoot "out\build\$BuildPreset"
+$betaFeaturesValue = if($BetaFeatures) { "ON" } else { "OFF" }
 if(-not $SkipNativeBuild) {
 	$nativeBuildExit = 0
 	Push-Location $sourceRoot
@@ -286,6 +288,7 @@ if(-not $SkipNativeBuild) {
 		$ReplayExtensionProviderSource = Resolve-RequiredFile `
 			$ReplayExtensionProviderSource "Replay extension provider source"
 		& cmake --preset $BuildPreset `
+			-DTH03_BETA_FEATURES:BOOL=$betaFeaturesValue `
 			-DTH03_REPLAY_EXTENSION_PROVIDER_SOURCE:FILEPATH=$ReplayExtensionProviderSource
 		if($LASTEXITCODE -ne 0) {
 			throw "Native th03-app configure failed with exit code $LASTEXITCODE."
@@ -299,6 +302,13 @@ if(-not $SkipNativeBuild) {
 	if($nativeBuildExit -ne 0) {
 		throw "Native th03-app build failed with exit code $nativeBuildExit."
 	}
+}
+$buildCache = Resolve-RequiredFile (Join-Path $buildRoot "CMakeCache.txt") `
+	"Native build cache"
+if(-not (Select-String -LiteralPath $buildCache -Quiet -Pattern (
+	"^TH03_BETA_FEATURES:BOOL=$betaFeaturesValue`$"
+))) {
+	throw "Native build and package disagree on TH03_BETA_FEATURES; rebuild with $betaFeaturesValue."
 }
 $appCandidates = @(
 	(Join-Path $buildRoot "$Configuration\th03-app.exe"),
@@ -416,10 +426,10 @@ try {
 		Copy-Item -LiteralPath $menuAsset.FullName `
 			-Destination $menuAssetDestination
 	}
-	$generatedMenuAssets = @(
-		"T3UFN001.BIN",
-		"T3CSP001-ES-TEST.BIN"
-	)
+	$generatedMenuAssets = @("T3UFN001.BIN")
+	if($BetaFeatures) {
+		$generatedMenuAssets += "T3CSP001-ES-TEST.BIN"
+	}
 	foreach($generatedMenuAsset in $generatedMenuAssets) {
 		$generatedMenuAssetPath = Join-Path $menuAssetSource $generatedMenuAsset
 		if(!(Test-Path -LiteralPath $generatedMenuAssetPath -PathType Leaf)) {
@@ -643,6 +653,7 @@ try {
 		"-c", "Release",
 		"-r", "win-x64",
 		"--self-contained", "true",
+		"-p:BetaFeatures=$($BetaFeatures.IsPresent.ToString().ToLowerInvariant())",
 		"-p:PayloadZip=$payloadZip",
 		"-p:PublishDir=$publishRoot"
 	)
@@ -721,6 +732,28 @@ try {
 				throw "Standalone smoke did not report its extracted install root."
 			}
 			$installRoot = $installLine.Substring("install-root=".Length)
+			$spanishAsset = Join-Path $installRoot "app\PODDUI\T3CSP001-ES-TEST.BIN"
+			if([IO.File]::Exists($spanishAsset) -ne $BetaFeatures.IsPresent) {
+				throw "Standalone experimental asset selection disagrees with its build."
+			}
+			# Invalid input is rejected before opening a network socket. A later
+			# successful launch must preserve that diagnostic for beta reports.
+			$failed = Start-Process -FilePath $portableExecutable -Wait -PassThru `
+				-ArgumentList @("--netplay-host", "0") -WindowStyle Hidden `
+				-RedirectStandardOutput $portableOut -RedirectStandardError $portableErr
+			$failureLog = Join-Path $portableUser "last-failed-run.log"
+			if($failed.ExitCode -eq 0 -or -not [IO.File]::Exists($failureLog) -or
+				-not [IO.File]::ReadAllText($failureLog).Contains("code=invalid-netplay-endpoint")) {
+				throw "Standalone failed-run diagnostic smoke did not reach the expected rejection."
+			}
+			$failureHash = (Get-FileHash -LiteralPath $failureLog).Hash
+			$reopened = Start-Process -FilePath $portableExecutable -Wait -PassThru `
+				-WindowStyle Hidden -RedirectStandardOutput $portableOut `
+				-RedirectStandardError $portableErr
+			if($reopened.ExitCode -ne 0 -or
+				(Get-FileHash -LiteralPath $failureLog).Hash -ne $failureHash) {
+				throw "Standalone successful relaunch erased the failure diagnostic."
+			}
 			$treeOne = Join-Path $installRoot "content\YUME1.DAT"
 			$treeTwo = Join-Path $installRoot "content\YUME2.DAT"
 			$oneFiles = Get-ChildItem -LiteralPath $treeOne -File -Recurse

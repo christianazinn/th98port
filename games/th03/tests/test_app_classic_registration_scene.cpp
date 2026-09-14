@@ -1218,6 +1218,27 @@ void test_zero_credit_audio_exit()
 			completion->raster().pixel(Page::zero, Point{0, 0}) == 9U,
 		"zero-credit completion publishes preloaded OVER only after stop"
 	);
+	if(completion) {
+		auto continue_scene = ClassicMainlContinueScene::create_from_registration(
+			std::move(*completion), 0U, font,
+			&th03::app::new_classic_builtin_japanese_game_text()
+		);
+		expect(
+			continue_scene && (*continue_scene)->phase() ==
+				ClassicMainlContinuePhase::ready &&
+				(*continue_scene)->selected_choice() ==
+					th03::ContinueChoice::decline,
+			"zero-credit registration handoff creates the immediate localized Game Over Continue scene"
+		);
+		if(continue_scene) {
+			auto continue_completion = (*continue_scene)->take_completion();
+			expect(
+				continue_completion && continue_completion->choice() ==
+					th03::ContinueChoice::decline,
+				"zero-credit registration handoff publishes exactly one decline completion"
+			);
+		}
+	}
 }
 
 void test_music_off_audio_exit()

@@ -71,20 +71,24 @@ std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> assets_fixture()
 	}
 	auto assets = std::make_shared<th03::app::NewClassicReplayPatchAssets>();
 	assets->menu_font = std::move(*decoded);
-	auto &background = assets->new_menu_backgrounds[static_cast<std::size_t>(
+	const auto fill_background = [](th03::assets::PiImage &background,
+		std::uint8_t fill) {
+		background.palette.emplace();
+		for(std::size_t index = 0U; index < 16U; ++index) {
+			background.palette->colors[index] = {
+				static_cast<std::uint8_t>(index),
+				static_cast<std::uint8_t>(index),
+				static_cast<std::uint8_t>(index),
+			};
+		}
+		background.image.width = 640U;
+		background.image.height = 400U;
+		background.image.indices.assign(256'000U, fill);
+	};
+	fill_background(assets->key_config_background, 4U);
+	fill_background(assets->new_menu_backgrounds[static_cast<std::size_t>(
 		th03::app::NewClassicMenuBackground::neutral
-	)];
-	background.palette.emplace();
-	for(std::size_t index = 0U; index < 16U; ++index) {
-		background.palette->colors[index] = {
-			static_cast<std::uint8_t>(index),
-			static_cast<std::uint8_t>(index),
-			static_cast<std::uint8_t>(index),
-		};
-	}
-	background.image.width = 640U;
-	background.image.height = 400U;
-	background.image.indices.assign(256'000U, 3U);
+	)], 3U);
 	return assets;
 }
 
@@ -148,10 +152,10 @@ void test_source_geometry_and_fade()
 	expect(
 		initial.shown_page == th03::present::Page::one &&
 		initial.palette_tone == 0 && !initial.host_overlay,
-		"first complete neutral-background frame is composed hidden and kept black"
+		"first complete BG1 frame is composed hidden and kept black"
 	);
-	expect(pixel(initial, 0U, 0U) == 3U,
-		"KeyConfig uses the source-distinct project-owned neutral background");
+	expect(pixel(initial, 0U, 0U) == 4U,
+		"KeyConfig uses the authenticated Replay Patch BG1 artwork");
 	expect(
 		pixel(initial, 284U, 64U) == 14U &&
 		pixel(initial, 248U, 96U) == 14U &&

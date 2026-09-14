@@ -690,6 +690,20 @@ enum class LivePausePhase : std::uint8_t {
 	release_after_resume,
 };
 
+namespace detail {
+
+// Source-private loss seam for the Classic integration test. It arms the
+// source result-control path one frame before its result-transition callback,
+// leaving the normal fadeout, route-1 boundary, and retry initialization in
+// control of GAME and its driver.
+struct GameTestAccess final {
+	[[nodiscard]] static bool force_practice_loss_retry(
+		Game &game
+	) noexcept;
+};
+
+} // namespace detail
+
 struct Game::Impl {
 	Impl(
 		const GameInit &init,

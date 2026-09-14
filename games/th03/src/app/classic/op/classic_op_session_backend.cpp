@@ -3489,6 +3489,14 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
+		if(outcome == ClassicOpVsRouteTestOutcome::player_one_loss_retry) {
+			if(!MainProcessTestAccess::force_practice_loss_retry(*vs_process)) {
+				return std::unexpected(detail::session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			return {};
+		}
 		terminal.route = outcome ==
 			ClassicOpVsRouteTestOutcome::exit_to_operator ? 0U : 2U;
 		terminal.game_mode = current_main_resident.game_mode;

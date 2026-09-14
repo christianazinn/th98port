@@ -1,5 +1,6 @@
 #include "th03/app/main/main_process.hpp"
 
+#include "../../core/game_internal.hpp"
 #include "main/main_process_internal.hpp"
 
 #include "main/main_process_static_content_internal.hpp"
@@ -588,6 +589,14 @@ void MainProcessTestAccess::feedback_dispatch_boundary(
 ) noexcept
 {
 	process.impl_->feedback_dispatch_boundary();
+}
+
+bool MainProcessTestAccess::force_practice_loss_retry(
+	MainProcess &process
+) noexcept
+{
+	return process.impl_->game && th03::detail::GameTestAccess::
+		force_practice_loss_retry(*process.impl_->game);
 }
 
 std::expected<std::unique_ptr<MainProcess>, MainProcessError>

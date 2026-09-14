@@ -151,15 +151,20 @@ internal static class Program
         var directNetplay = commandLine.Any(argument =>
             argument == "--netplay-host" || argument == "--netplay-join"
         );
-        var dopamineArrange = commandLine.Count == 2 &&
+        var dopamineArrange = false;
+#if TH03_BETA_FEATURES
+        dopamineArrange = commandLine.Count == 2 &&
             commandLine[0] == "--arrange" &&
             commandLine[1] == "dopamine-test-v1";
+#endif
         if(commandLine.Count != 0 && !directNetplay && !dopamineArrange)
         {
             throw new InvalidOperationException(
                 "Standalone command-line options currently require " +
-                "--netplay-host, --netplay-join, or " +
-                "--arrange dopamine-test-v1."
+                "--netplay-host or --netplay-join."
+#if TH03_BETA_FEATURES
+                + " Experimental builds also accept --arrange dopamine-test-v1."
+#endif
             );
         }
         if(directNetplay)
@@ -274,6 +279,10 @@ internal static class Program
         File.WriteAllText(logPath, log.ToString(), Encoding.UTF8);
         if(process.ExitCode != 0)
         {
+            // A successful next launch must not erase the report needed to
+            // diagnose the previous failure. Retain one bounded failure log.
+            logPath = Path.Combine(userRoot, "last-failed-run.log");
+            File.WriteAllText(logPath, log.ToString(), Encoding.UTF8);
             var message = $"PoDD Port exited with code {process.ExitCode}.\n\n" +
                 $"Diagnostic log:\n{logPath}";
             if(IsSmokeMode())

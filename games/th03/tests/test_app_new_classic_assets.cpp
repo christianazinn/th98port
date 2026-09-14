@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "th03/app/new_classic/content/new_classic_assets.hpp"
+#include "th03/app/new_classic/beta_features.hpp"
 
 namespace {
 
@@ -254,8 +255,10 @@ void test_authentic_archive_if_supplied()
 	);
 	expect(loaded->replay_list_background.image.width == 640U &&
 		loaded->replay_name_background.image.height == 400U &&
+		loaded->key_config_background.image.width == 640U &&
+		loaded->key_config_background.image.height == 400U &&
 		neutral.image.indices.size() == 256'000U,
-		"used source and neutral authenticated full-screen backgrounds decode");
+		"used source, BG1 KeyConfig, and neutral full-screen backgrounds decode");
 	expect(std::ranges::find(
 		neutral.image.indices, 12U
 	) == neutral.image.indices.end() &&
@@ -297,11 +300,14 @@ void test_authentic_archive_if_supplied()
 		), "installed fallback font covers Latin and Japanese UTF-8");
 		expect(!loaded->menu_font.supports_utf8("\xE2\x80\xAEspoof"),
 			"installed fallback font rejects unsupported bidi controls");
-		expect(
-			loaded->custom_character_select_assets &&
+		if constexpr(th03::app::new_classic_beta_features_enabled) {
+			expect(loaded->custom_character_select_assets &&
 				loaded->custom_character_select_assets->locale() == "es-TEST",
-			"repo-owned test locale Character Select package loads with PODDUI"
-		);
+				"beta Character Select package loads with PODDUI");
+		} else {
+			expect(!loaded->custom_character_select_assets,
+				"default assets do not load the experimental Character Select package");
+		}
 	}
 }
 

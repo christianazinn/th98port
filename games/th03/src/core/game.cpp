@@ -271,6 +271,29 @@ Game::Game(Game &&) noexcept = default;
 Game &Game::operator=(Game &&) noexcept = default;
 Game::~Game() = default;
 
+bool detail::GameTestAccess::force_practice_loss_retry(Game &game) noexcept
+{
+	auto &impl = *game.impl_;
+	auto &state = impl.state;
+	if(state.round_complete || !state.practice_uses_stock ||
+		state.story_lives == 0U) {
+		return false;
+	}
+
+	// result_control_update() starts the loss fadeout at frame 160, then, after
+	// its opening callback, records the losing player, decrements stock, and
+	// hands route 1 to sub_A21F(). Start one frame before that actual branch so
+	// GAME, the driver, and the presenter all consume the source transition.
+	state.last_fatal_player = 0U;
+	state.winner = 1;
+	state.defeat_flag = detail::DefeatFlag::banner;
+	state.result_phase = detail::ResultPhase::idle;
+	state.result_phase_frame = 0U;
+	state.result_transition_complete = false;
+	state.round_or_result_frame = 159U;
+	return true;
+}
+
 std::expected<Game, Error> Game::create(const GameInit &init)
 
 {

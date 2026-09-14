@@ -18,6 +18,7 @@
 #include "th03/app/classic/persistence/classic_config_store.hpp"
 #include "th03/app/classic/classic_runner.hpp"
 #include "th03/app/classic/persistence/classic_score_store.hpp"
+#include "th03/app/new_classic/beta_features.hpp"
 #include "th03/app/new_classic/content/new_classic_language.hpp"
 #include "th03/app/new_classic/persistence/new_classic_score_store.hpp"
 #include "th03/app/new_classic/persistence/new_classic_settings_store.hpp"
@@ -155,11 +156,20 @@ void test_cli()
 		"--data", "d", "--main", "m", "--mainl", "l",
 		"--op", "o", "--font", "f",
 	});
+
+#if TH03_BETA_FEATURES
 	expect(
 		arrange &&
 		arrange->launch.gameplay_ruleset == th03::dopamine_test_v1_ruleset,
 		"Dopamine Arrange is an explicit versioned New Classic CLI contract"
 	);
+#else
+	expect(
+		!arrange && arrange.error().code ==
+			th03::app::ClassicCliErrorCode::invalid_arrange,
+		"default builds reject the unavailable Dopamine Arrange CLI option"
+	);
+#endif
 	const auto arrange_classic = parse({
 		"--classic", "--arrange", "dopamine-test-v1",
 		"--data", "d", "--main", "m", "--mainl", "l",
@@ -1110,6 +1120,11 @@ void test_file_and_request_boundaries()
 		.content = placeholder,
 		.gameplay_ruleset = th03::dopamine_test_v1_ruleset,
 	});
+	const auto arrange_new_classic = th03::app::ClassicRunner::load({
+		.content = placeholder,
+		.experience = th03::app::ExperienceProfile::new_classic,
+		.gameplay_ruleset = th03::dopamine_test_v1_ruleset,
+	});
 	const auto arrange_replay = th03::app::ClassicRunner::load({
 		.content = placeholder,
 		.experience = th03::app::ExperienceProfile::new_classic,
@@ -1141,6 +1156,15 @@ void test_file_and_request_boundaries()
 			th03::app::ClassicRunnerErrorCode::invalid_request,
 		"Arrange fails closed at sealed Classic, stock V14 playback, and online-upload boundaries"
 	);
+#if TH03_BETA_FEATURES
+	expect(!arrange_new_classic && arrange_new_classic.error().code ==
+		th03::app::ClassicRunnerErrorCode::file_missing,
+		"beta runner admits Arrange before checking its New Classic content");
+#else
+	expect(!arrange_new_classic && arrange_new_classic.error().code ==
+		th03::app::ClassicRunnerErrorCode::invalid_request,
+		"default runner rejects direct Arrange activation before content I/O");
+#endif
 }
 
 [[nodiscard]] std::uint64_t surface_digest(
@@ -2546,6 +2570,12 @@ bool authentic_practice_gate(
 			advanced->status ==
 				th03::app::ClassicRunnerStatus::session_complete))) {
 			std::cerr << "authentic-practice-step tick=" << tick_index - 1U
+				<< " error=" << (advanced ? 0U : static_cast<unsigned>(
+					advanced.error().code
+				)) << " detail=" << (advanced ? 0U : static_cast<unsigned>(
+					advanced.error().detail_code
+				)) << " main=" << (!advanced && advanced.error().process_error ?
+					static_cast<unsigned>(advanced.error().process_error->code) : 0U)
 				<< " scene=" << static_cast<unsigned>(scene().value_or(
 					th03::app::ClassicOpSessionScene::failed
 				)) << '\n';
@@ -2632,17 +2662,38 @@ bool authentic_practice_gate(
 	if(scene() != th03::app::ClassicOpSessionScene::vs_main ||
 		!last || !last->process_advanced ||
 		!th03::app::ClassicRunnerTestAccess::force_vs_main_outcome(
+			runner,
+			th03::app::ClassicOpVsRouteTestOutcome::player_one_loss_retry
+		)) {
+		return fail_stage("main-retry-arm");
+	}
+	bool retry_started = false;
+	for(std::size_t frame = 0U; frame < 32U && scene() ==
+		th03::app::ClassicOpSessionScene::vs_main; ++frame) {
+		if(!step()) {
+			return false;
+		}
+		if(last && last->process_advanced && last->round_started) {
+			retry_started = true;
+			break;
+		}
+	}
+	if(!retry_started || scene() != th03::app::ClassicOpSessionScene::vs_main ||
+		!th03::app::ClassicRunnerTestAccess::force_vs_main_outcome(
 			runner, th03::app::ClassicOpVsRouteTestOutcome::exit_to_operator
 		) || !step() || !step()) {
-		return fail_stage("main-terminal");
+		return fail_stage("main-retry-terminal");
 	}
 	auto replay = runner.take_completed_replay();
 	if(!replay || !replay->practice || !replay->metadata ||
 		!replay->metadata->practice || replay->metadata->flags != 0x0007U ||
 		replay->metadata->practice->preset != 1U ||
-		replay->checkpoints.empty() ||
+		replay->checkpoints.size() != 2U ||
 		!replay->checkpoints[0U].init.practice_rules ||
-		replay->expected_round_splits.empty() ||
+		replay->expected_round_splits.size() != 2U ||
+		replay->checkpoints[1U].round != static_cast<std::uint8_t>(
+			replay->checkpoints[0U].round + 1U
+		) ||
 		replay->expected_round_splits[0U].story_stage !=
 			replay->metadata->practice->stage ||
 		!th03::formats::write_v14_replay(*replay)) {
@@ -2781,6 +2832,7 @@ bool authentic_gate(
 	};
 	drain_audio();
 	std::uint64_t tick_index = 0U;
+	std::uint32_t mainl_owned_ticks = 0U;
 	std::optional<th03::app::ClassicRunnerConsumeResult> last{};
 	std::optional<th03::present::SourceSurface> last_surface{};
 	const auto composed_initial = runner.compose_shown_surface(pixels);
@@ -2791,6 +2843,11 @@ bool authentic_gate(
 	const auto step = [&](std::uint16_t system = 0U, bool allow_complete = false) {
 		const auto story_before =
 			th03::app::ClassicRunnerTestAccess::story_scene(runner);
+		if(story_before && *story_before !=
+			th03::app::ClassicStorySessionScene::complete && *story_before !=
+			th03::app::ClassicStorySessionScene::failed) {
+			++mainl_owned_ticks;
+		}
 		th03::CoreInput input{};
 		input.system = system;
 		auto advanced = runner.consume({
@@ -3028,6 +3085,14 @@ bool authentic_gate(
 			}
 			return step(0x0020U) && step();
 		};
+		const auto select_japanese_from_english = [&]() {
+			if(!step(0x0020U) || !step()) { return false; }
+#if TH03_BETA_FEATURES
+			return step(0x0020U) && step();
+#else
+			return true;
+#endif
+		};
 		const auto sample_input = [&](std::uint16_t system) {
 			for(std::size_t frame = 0U; frame < 8U; ++frame) {
 				if(!step(system)) { return false; }
@@ -3055,7 +3120,8 @@ bool authentic_gate(
 		const bool opened_japanese = step(0x0020U);
 		const bool ready_japanese = opened_japanese && settle_options();
 		const bool selected_language = ready_japanese && enter_language_row();
-		const bool toggled_japanese = selected_language && step(0x0020U) && step();
+		const bool toggled_japanese = selected_language &&
+			select_japanese_from_english();
 		const bool canceled_japanese = toggled_japanese && leave_options();
 		// The Cancel tick changes the scene's phase to shrink_window. The session
 		// observes that returned phase and publishes the reloaded Japanese TL02
@@ -3097,7 +3163,7 @@ bool authentic_gate(
 		};
 		if(!stored_before_commit ||
 			stored_before_commit->settings.options.language !=
-				th03::app::ClassicLanguage::english ||
+				th03::app::ClassicLanguage::japanese ||
 			current_classic_config != original_classic_config) {
 			std::cerr << "authentic-script-stage=settings-precommit-isolation\n";
 			return false;
@@ -3672,10 +3738,13 @@ bool authentic_gate(
 		temporary.path() / "YUME.NEW.NEM"
 	);
 	// Four successful registrations each roll the committed run into a fresh
-	// active run. The aggregate includes every source VSync owned by MAIN or
-	// MAINL across the complete Story branch matrix above, and excludes OP.
+	// active run. Story-owned host ticks provide an independent upper bound:
+	// immediate/preload/ready handoffs do not all advance a source VSync. This
+	// aggregate sanity check is not an exact measurement of the score clock.
 	if(!final_score || final_score->document.last_run_id != 13U ||
-		final_score->document.boards[1U][0U].stats.play_frames != 33084U ||
+		final_score->document.boards[1U][0U].stats.play_frames == 0U ||
+		final_score->document.boards[1U][0U].stats.play_frames >
+			mainl_owned_ticks ||
 		final_score->document.boards[1U][0U].stats.one_ccs != 1U ||
 		final_score->document.boards[1U][0U].stats.continues_used != 4U) {
 		std::cerr << "authentic-script-stage=score-statistics";
@@ -3683,6 +3752,7 @@ bool authentic_gate(
 			const auto &stats = final_score->document.boards[1U][0U].stats;
 			std::cerr << " run=" << final_score->document.last_run_id
 				<< " frames=" << stats.play_frames
+				<< " upper-bound=" << mainl_owned_ticks
 				<< " one-cc=" << stats.one_ccs
 				<< " continues=" << stats.continues_used;
 		}

@@ -828,6 +828,14 @@ void gameplay_frame_suffix_after_interstitial(
 		});
 	}
 	if(result_control_update(state)) {
+		// Replay Pause's explicit exit is a native-port session boundary, not a
+		// source result callback. The source callback returns before the footer;
+		// preserve that return while letting an already accepted exit preempt a
+		// route-1 Practice retry.
+		if(state.session_exit_requested) {
+			state.route = 0U;
+			state.round_complete = true;
+		}
 		return;
 	}
 	if(observer != nullptr) {

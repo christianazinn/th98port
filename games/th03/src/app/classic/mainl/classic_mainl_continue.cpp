@@ -481,7 +481,7 @@ ClassicMainlContinueScene::create_from_registration_impl(
 	);
 	scene->raster_ = std::move(completion.raster_);
 	if(remaining_credits == 0U) {
-		const auto &localized = prepared->localized_text[
+		const auto &localized = scene->prepared_->localized_text[
 			localized_index(LocalizedContinueText::gameover)
 		];
 		if(localized && (!scene->raster_.clear(gameover_title_rect, 0U) ||

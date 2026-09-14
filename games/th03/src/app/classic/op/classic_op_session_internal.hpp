@@ -182,6 +182,7 @@ enum class ClassicOpVsRouteTestOutcome : std::uint8_t {
 	exit_to_operator,
 	player_one_win,
 	player_two_win,
+	player_one_loss_retry,
 };
 
 enum class ClassicOpVsSurfaceSource : std::uint8_t {

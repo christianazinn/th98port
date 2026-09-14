@@ -138,7 +138,7 @@ NewClassicKeyConfigScene::NewClassicKeyConfigScene(
 	patch_assets_(std::move(patch_assets))
 {
 	if(!patch_assets_ || !patch_surface_.reset(
-		patch_assets_->menu_background(NewClassicMenuBackground::neutral)
+		patch_assets_->key_config_background
 	)) {
 		fail_surface();
 		return;
@@ -334,9 +334,7 @@ bool NewClassicKeyConfigScene::compose_screen() noexcept
 	}
 	const auto target = opposite(front_page_);
 	auto &raster = patch_surface_.raster();
-	const auto &background = patch_assets_->menu_background(
-		NewClassicMenuBackground::neutral
-	);
+	const auto &background = patch_assets_->key_config_background;
 	if(!raster.set_access_page(target) || !present::pi_put_8(
 		raster, 0, 0, background
 	)) {

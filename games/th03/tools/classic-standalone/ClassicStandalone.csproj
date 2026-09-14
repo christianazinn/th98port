@@ -21,6 +21,10 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(BetaFeatures)' == 'true'">
+    <DefineConstants>$(DefineConstants);TH03_BETA_FEATURES</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup Condition="'$(PayloadZip)' != ''">
     <EmbeddedResource Include="$(PayloadZip)"
                       LogicalName="TH03.PoDDPort.Payload.zip" />

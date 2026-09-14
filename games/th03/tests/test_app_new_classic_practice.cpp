@@ -92,6 +92,57 @@ struct RetainedSelection final {
 	}
 };
 
+// Mirrors only the extension provider's begin/finish lifetime contract used by
+// the standalone host. It intentionally has no product-byte schema.
+struct PracticeExtensionProbe final {
+	std::size_t begins = 0U;
+	std::size_t finishes = 0U;
+	bool active = false;
+	bool active_context_replaced = false;
+};
+
+bool practice_extension_begin(
+	void *context,
+	th03::formats::ReplayOpaqueExtension &extension
+) noexcept
+{
+	auto &probe = *static_cast<PracticeExtensionProbe *>(context);
+	if(probe.active) {
+		probe.active_context_replaced = true;
+	}
+	++probe.begins;
+	probe.active = true;
+	extension.front() = static_cast<std::uint8_t>(probe.begins);
+	return true;
+}
+
+bool practice_extension_finish(
+	void *context,
+	std::span<const std::byte> encoded_replay,
+	th03::formats::ReplayOpaqueExtension &extension
+) noexcept
+{
+	auto &probe = *static_cast<PracticeExtensionProbe *>(context);
+	++probe.finishes;
+	if(!probe.active || encoded_replay.size() < 896U) {
+		return false;
+	}
+	probe.active = false;
+	extension[1U] = 0x5AU;
+	return true;
+}
+
+th03::app::NewClassicReplayExtensionProvider practice_extension_provider(
+	PracticeExtensionProbe &probe
+) noexcept
+{
+	return {
+		.context = &probe,
+		.begin = &practice_extension_begin,
+		.finish = &practice_extension_finish,
+	};
+}
+
 const th03::present::ComposedPixel &pixel(
 	th03::present::SourceSurface surface,
 	std::size_t x,
@@ -494,23 +545,70 @@ void test_checkpoint_and_recording()
 		return;
 	}
 
-	th03::app::NewClassicReplayRecorder recorder(0x5D0CU);
+	PracticeExtensionProbe extension{};
+	th03::app::NewClassicReplayRecorder recorder(
+		0x5D0CU, true, {}, practice_extension_provider(extension)
+	);
+	const auto first_round = game->round_start_observation();
+	auto retry_round = first_round;
+	retry_round.start.story_lives = static_cast<std::uint8_t>(
+		retry_round.start.story_lives - 1U
+	);
+	retry_round.round.state.round_id = static_cast<std::uint8_t>(
+		retry_round.round.state.round_id + 1U
+	);
+	// sub_9EBF() reruns the ordinary rank initializer before Practice restores
+	// only its selected retry fields. These are deliberately no longer the
+	// checkpoint-0 menu anchor values.
+	retry_round.round.state.round_speed = static_cast<std::uint8_t>(
+		retry_round.round.state.round_speed + 1U
+	);
+	retry_round.round.state.bullet_base_speed = static_cast<std::uint8_t>(
+		retry_round.round.state.bullet_base_speed + 1U
+	);
+	retry_round.round.state.gauge_attack_level = {9U, 9U};
+	const auto retry_safety = th03::practice_cpu_safety_frames(
+		static_cast<th03::CpuTimerPolicy>(config.cpu_timer),
+		first_round.start.rank,
+		config.stage,
+		retry_round.round.state.round_id,
+		first_round.start.is_cpu
+	);
+	retry_round.round.state.cpu_safety_frames = {retry_safety, retry_safety};
 	check(
 		recorder.configure_practice(config).has_value() &&
-		recorder.round_started(game->round_start_observation()).has_value() &&
+		recorder.round_started(first_round).has_value() &&
 		recorder.sample(th03::replay::InputPhase::gameplay, {}).has_value(),
 		"live recorder accepts the exact Practice anchor"
 	);
 	auto terminal = game->canonical_state();
+	terminal.route = 1U;
+	terminal.winner = 1;
+	check(
+		recorder.round_completed(terminal).has_value() &&
+		recorder.round_started(retry_round).has_value() &&
+		recorder.document() && recorder.document()->checkpoints.size() == 2U &&
+		recorder.document()->checkpoints[1U].round ==
+			retry_round.round.state.round_id,
+		"a source-shaped Practice retry records its evolving checkpoint"
+	);
+
+	// Esc+R discards the unfinished record. The following MAINL restart begins
+	// another Practice record, replacing the provider's still-active context;
+	// only the completed retry needs one successful finish.
+	recorder.discard();
 	terminal.route = 0U;
 	terminal.winner = 0;
 	check(
+		recorder.configure_practice(config).has_value() &&
+		recorder.round_started(first_round).has_value() &&
+		recorder.sample(th03::replay::InputPhase::gameplay, {}).has_value() &&
 		recorder.round_completed(terminal).has_value() &&
 		recorder.process_completed(th03::replay::ProcessId::main).has_value() &&
 		recorder.finish(
-			th03::formats::ReplayEndReason::menu_return, *prepared
+			th03::formats::ReplayEndReason::menu_return, first_round.start
 		).has_value(),
-		"Practice terminal finalizes through V14"
+		"Practice discard/restart finalizes through a stateful extension provider"
 	);
 	auto document = recorder.take_completed();
 	check(
@@ -518,8 +616,10 @@ void test_checkpoint_and_recording()
 		document->metadata->flags == 0x0007U &&
 		document->checkpoints[0U].stage == config.stage &&
 		document->expected_round_splits[0U].story_stage == config.stage &&
-		th03::formats::write_v14_replay(*document).has_value(),
-		"Practice V14 retains flag, header, checkpoint stage, and split identity"
+		th03::formats::write_v14_replay(*document).has_value() &&
+		extension.begins == 2U && extension.finishes == 1U &&
+		extension.active_context_replaced && !extension.active,
+		"Practice V14 retains its identity and replaces then finalizes provider state"
 	);
 
 	auto bad = config;

@@ -37,6 +37,11 @@ option(TH03_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 option(TH03_ENABLE_SDL "Build the optional SDL 3 platform adapter" OFF)
 option(TH03_ENABLE_RTC "Build the optional WebRTC netplay transport" OFF)
 option(
+	TH03_BETA_FEATURES
+	"Enable experimental New Classic language and Arrange features"
+	OFF
+)
+option(
 	TH03_PACKAGE_BETA
 	"Install redistributable beta binaries and dependency licenses"
 	OFF
@@ -786,6 +791,9 @@ add_library(th03_app_persistence STATIC
 	src/app/update/update_package.cpp
 )
 target_include_directories(th03_app_persistence PUBLIC include)
+target_compile_definitions(
+	th03_app_persistence PUBLIC TH03_BETA_FEATURES=$<BOOL:${TH03_BETA_FEATURES}>
+)
 target_compile_features(th03_app_persistence PUBLIC cxx_std_23)
 set_target_properties(th03_app_persistence PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_app_persistence)
@@ -2065,6 +2073,18 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-new-classic-settings-tests
 		COMMAND th03-app-new-classic-settings-tests
+	)
+
+	add_executable(th03-app-beta-features-tests
+		tests/test_app_beta_features.cpp
+	)
+	target_link_libraries(
+		th03-app-beta-features-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-beta-features-tests)
+	add_test(
+		NAME th03-app-beta-features-tests
+		COMMAND th03-app-beta-features-tests
 	)
 
 	add_executable(th03-app-update-manifest-tests

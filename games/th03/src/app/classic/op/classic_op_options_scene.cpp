@@ -13,6 +13,7 @@
 #include <utility>
 
 #include "th03/assets/decode.hpp"
+#include "th03/app/new_classic/beta_features.hpp"
 #include "th03/present/pi.hpp"
 
 namespace th03::app {
@@ -100,9 +101,12 @@ constexpr std::array<ClassicOpOptionsChoice, 7U> category_choices{{
 	ClassicOpOptionsChoice::category_system,
 	ClassicOpOptionsChoice::quit,
 }};
-constexpr std::array<ClassicOpOptionsChoice, 3U> gameplay_choices{{
+constexpr std::array<ClassicOpOptionsChoice,
+	TH03_BETA_FEATURES ? 3U : 2U> gameplay_choices{{
 	ClassicOpOptionsChoice::rank,
+#if TH03_BETA_FEATURES
 	ClassicOpOptionsChoice::arrange,
+#endif
 	ClassicOpOptionsChoice::return_page,
 }};
 constexpr std::array<ClassicOpOptionsChoice, 6U> audio_choices{{
@@ -806,6 +810,14 @@ ClassicOpOptionsScene::create(
 	NewClassicUpdateUiState update
 )
 {
+#if !TH03_BETA_FEATURES
+	if(config.language == ClassicLanguage::spanish_test) {
+		config.language = ClassicLanguage::english;
+	}
+	if(resident.gameplay_ruleset == dopamine_test_v1_ruleset) {
+		resident.gameplay_ruleset = stock_gameplay_ruleset;
+	}
+#endif
 	if(!classic_config_valid(config) || (patch_assets && !font) ||
 		master_volume_percent > 100U || (master_volume_percent % 5U) != 0U ||
 		music_volume_percent > 100U || (music_volume_percent % 5U) != 0U ||
@@ -1741,10 +1753,12 @@ bool ClassicOpOptionsScene::update_horizontal(
 		break;
 	}
 	case ClassicOpOptionsChoice::arrange:
+#if TH03_BETA_FEATURES
 		resident_.gameplay_ruleset =
 			stock_gameplay_rules(resident_.gameplay_ruleset) ?
 				dopamine_test_v1_ruleset : stock_gameplay_ruleset;
 		config_changed = true;
+#endif
 		break;
 	case ClassicOpOptionsChoice::master_volume: {
 		const auto step = static_cast<std::uint8_t>(
@@ -1915,7 +1929,8 @@ bool ClassicOpOptionsScene::update_horizontal(
 	case ClassicOpOptionsChoice::language:
 		if(patch_assets_ && language_available_) {
 			config_.language = static_cast<ClassicLanguage>(ring_step(
-				static_cast<std::uint8_t>(config_.language), direction, 2U
+				static_cast<std::uint8_t>(config_.language), direction,
+				TH03_BETA_FEATURES ? 2U : 1U
 			));
 			config_changed = true;
 		}

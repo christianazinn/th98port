@@ -15,6 +15,7 @@
 #include "classic/op/classic_op_music_room_internal.hpp"
 #include "classic/op/classic_op_options_scene_internal.hpp"
 #include "classic/op/classic_op_selection_internal.hpp"
+#include "th03/app/new_classic/beta_features.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/present/pi.hpp"
 
@@ -117,7 +118,12 @@ constexpr std::array<std::int32_t, 4U> demo_random{{
 
 [[nodiscard]] bool arrange_rules(const GameInit &resident) noexcept
 {
+#if TH03_BETA_FEATURES
 	return !stock_gameplay_rules(resident.gameplay_ruleset);
+#else
+	static_cast<void>(resident);
+	return false;
+#endif
 }
 
 [[nodiscard]] bool choice_available(

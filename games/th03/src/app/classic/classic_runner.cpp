@@ -1,4 +1,5 @@
 #include "th03/app/classic/classic_runner.hpp"
+#include "th03/app/new_classic/beta_features.hpp"
 
 #include "classic/classic_runner_internal.hpp"
 #include "classic/classic_input_bits_internal.hpp"
@@ -399,6 +400,8 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		paths.font_rom.empty() || paths.config.empty() || paths.score.empty() ||
 		(request.autofire_mask > 3U) ||
 		!valid_gameplay_ruleset(request.gameplay_ruleset) ||
+		(!new_classic_beta_features_enabled &&
+			!stock_gameplay_rules(request.gameplay_ruleset)) ||
 		(request.experience == ExperienceProfile::classic &&
 		 !stock_gameplay_rules(request.gameplay_ruleset)) ||
 		(!stock_gameplay_rules(request.gameplay_ruleset) &&
