@@ -43,7 +43,7 @@ try {
 		const std::string_view arg = argv[i];
 		if (arg == "--help") {
 			std::cout << "TH05 partial headless core (not replay-validated)\n"
-				"--data DIR [--input FILE | --input-pairs FILE] [--frames N] [--rank 0..3]\n"
+				"--data DIR [--input FILE | --input-pairs FILE] [--frames N] [--rank 0..3, 4 for Extra]\n"
 				"[--character 0..3] [--seed N] [--power 1..128] [--shift] [--stage 1..7 (7=Extra)]\n"
 				"[--lives 0..9] [--bombs 0..9] [--turbo]\n"
 				"--demo 0..3 reads DEMO#.REC from DIR with source demo setup.\n"
@@ -91,8 +91,8 @@ try {
 		if (demo > 3U || demo_conflicting_option) {
 			throw std::runtime_error("--demo cannot be combined with ordinary input settings");
 		}
-	} else if (rank > 3 || character > 3 || power == 0 || power > 128 ||
-		stage < 1 || stage > 7 || lives > 9 || bombs > 9 ||
+	} else if (stage < 1 || stage > 7 || rank > (stage == 7 ? 4U : 3U) ||
+		character > 3 || power == 0 || power > 128 || lives > 9 || bombs > 9 ||
 		(!input_path.empty() && !pair_path.empty()) || (!pair_path.empty() && shift)) {
 		throw std::runtime_error("Invalid configuration; see --help");
 	}

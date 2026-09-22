@@ -32,7 +32,7 @@ try {
 		const std::string_view arg = argv[i];
 		if (arg == "--help") {
 			std::cout << "TH04 partial headless core (not replay-validated)\n"
-				"--data DIR [--demo2 | --input FILE | --input-pairs FILE] [--frames N] [--rank 0..3]\n"
+				"--data DIR [--demo2 | --input FILE | --input-pairs FILE] [--frames N] [--rank 0..3, 4 for Extra]\n"
 				"[--character 0..1] [--shot 0..1] [--seed N] [--stage 1..7 (7=Extra)]\n"
 				"[--lives 0..9] [--bombs 0..9] [--turbo]\n"
 				"Input: one original low-byte input mask per gameplay tick.\n"
@@ -55,7 +55,8 @@ try {
 			if (!target || !number(value, *target)) throw std::runtime_error("Invalid option");
 		}
 	}
-	if (data.empty() || rank > 3 || character > 1 || shot > 1 || stage < 1 || stage > 7 ||
+	if (data.empty() || stage < 1 || stage > 7 || rank > (stage == 7 ? 4U : 3U) ||
+		character > 1 || shot > 1 ||
 		lives > 9 || bombs > 9 || (!input_path.empty() && !pair_path.empty()) ||
 		(demo && (!input_path.empty() || !pair_path.empty() || stage != 1 || turbo)))
 		throw std::runtime_error("Invalid configuration; see --help");
