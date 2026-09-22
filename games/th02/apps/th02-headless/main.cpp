@@ -41,11 +41,21 @@ std::uint32_t number(std::string_view value)
 	return result;
 }
 
+std::int32_t signed_number(std::string_view value)
+{
+	std::int32_t result{};
+	const auto parsed = std::from_chars(value.data(), value.data() + value.size(), result);
+	if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size())
+		throw std::runtime_error("expected signed decimal number");
+	return result;
+}
+
 void help()
 {
 	std::cout << "TH02 headless stage runner (not a replay verifier)\n"
 		"--data DIR (--input FILE [--stage 0..5] [--seed N] [--rank 0..4] [--shot 0..2]\n"
-		"[--lives 0..5] [--bombs 0..5] [--power 0..80] | --demo 1..3)\n"
+		"[--lives 0..5] [--bombs 0..5] [--power 0..80] [--score N] [--highest N]\n"
+		"[--continues 0..65535] [--resident-frame N] [--reduce-effects] | --demo 1..3)\n"
 		"DIR contains extracted MIKO*.BFT and STAGE0 through STAGE5 BFT/BMT/BBT/MAP/DT1.\n"
 		"Input is little-endian uint16 masks, one per gameplay iteration. --demo loads\n"
 		"the corresponding DEMO#.REC with its source-defined starting state.\n"
@@ -149,6 +159,11 @@ int main(int argc, char **argv)
 		std::filesystem::path data, input_path;
 		std::uint32_t stage = 0, demo = 0, seed = 0, rank = 1, shot = 0;
 		std::uint32_t lives = 2, bombs = 3, power = 1;
+		std::uint32_t continues = 0;
+		std::int32_t starting_score = 0, highest_score = 0;
+		std::int32_t resident_frame = 0;
+		bool reduce_effects{};
+		bool resident_frame_specified{};
 		bool input_specified{};
 		bool direct_option_specified{};
 		bool rank_specified{}, bombs_specified{};
@@ -158,6 +173,11 @@ int main(int argc, char **argv)
 			if (key == "--help") { help(); return 0; }
 			if (key == "--allow-truncated-spawn-tail") {
 				tail_policy = EnemyStageDataTailPolicy::materialize_complete_spawn_rows;
+				continue;
+			}
+			if (key == "--reduce-effects") {
+				reduce_effects = true;
+				direct_option_specified = true;
 				continue;
 			}
 			if (++i == argc) throw std::runtime_error("missing option value");
@@ -172,10 +192,19 @@ int main(int argc, char **argv)
 			else if (key == "--lives") { lives = number(value); direct_option_specified = true; }
 			else if (key == "--bombs") { bombs = number(value); bombs_specified = true; direct_option_specified = true; }
 			else if (key == "--power") { power = number(value); direct_option_specified = true; }
+			else if (key == "--score") { starting_score = signed_number(value); direct_option_specified = true; }
+			else if (key == "--highest") { highest_score = signed_number(value); direct_option_specified = true; }
+			else if (key == "--continues") { continues = number(value); direct_option_specified = true; }
+			else if (key == "--resident-frame") {
+				resident_frame = signed_number(value);
+				resident_frame_specified = true;
+				direct_option_specified = true;
+			}
 			else throw std::runtime_error("unknown option: " + std::string(key));
 		}
 		if (data.empty() || stage > 5U || demo > 3U || rank > 4U || shot > 2U ||
-			lives > 5U || bombs > 5U || power > 80U || (demo == 0U && input_path.empty()) ||
+			lives > 5U || bombs > 5U || power > 80U || continues > 65535U ||
+			(demo == 0U && input_path.empty()) ||
 			(demo != 0U && (input_specified || direct_option_specified)))
 			throw std::runtime_error("missing data/input or option out of range; use --help");
 
@@ -217,11 +246,14 @@ int main(int argc, char **argv)
 		state.player_miss.playperf = is_demo ? 12 : 0;
 		state.score.lives = static_cast<std::int8_t>(lives);
 		state.score.bombs = static_cast<std::int8_t>(bombs);
+		state.score.score = starting_score;
+		state.resident_score_highest = highest_score;
 		state.bomb_selection = static_cast<BombSelection>(shot);
 		state.random.seed = seed;
-		state.resident_frame = std::bit_cast<std::int32_t>(seed);
+		state.resident_frame = resident_frame_specified ? resident_frame :
+			std::bit_cast<std::int32_t>(seed);
 		state.max_enemy_vm_steps = 1024; // Host runaway-script cap, not a source timer.
-		gameplay_options_apply(state, false, 0U);
+		gameplay_options_apply(state, reduce_effects, static_cast<std::uint16_t>(continues));
 		if (!hud_shot_level_from_power(state.player_miss.power, state.player_stream.shot_level))
 			throw std::runtime_error("invalid power");
 
