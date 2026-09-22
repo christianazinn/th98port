@@ -34,6 +34,15 @@ std::uint32_t number(std::string_view text)
 	return result;
 }
 
+std::int32_t signed_number(std::string_view text)
+{
+	std::int32_t result{};
+	const auto parsed = std::from_chars(text.data(), text.data() + text.size(), result);
+	if(parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size())
+		throw std::runtime_error("expected signed decimal number");
+	return result;
+}
+
 const char *name(TickResult result)
 {
 	switch(result) {
@@ -56,12 +65,15 @@ int main(int argc, char **argv)
 	try {
 		std::filesystem::path data, input_path;
 		std::uint32_t stage{}, route{}, rank{1}, seed{}, lives{4}, bombs{1};
+		std::uint32_t score{}, point_value{};
+		std::int32_t pellet_speed{};
 		for(int i = 1; i < argc; ++i) {
 			const std::string_view option(argv[i]);
 			if(option == "--help") {
 				std::cout << "TH01 headless stage runner (not a replay verifier)\n"
 					"--data ARCHIVE --input FILE [--stage 0..19] [--route 0..1]\n"
 					"[--rank 0..3] [--seed N] [--lives 0..6] [--bombs 0..5]\n"
+					"[--score N] [--point-value 0..65535] [--pellet-speed -32768..32767]\n"
 					"Input consists of six raw PC-98 key-group bytes (0,3,5,7,8,9) per sample.\n"
 					"Consumes the initial Shot gate; stops at pause, life loss, route choice or clear.\n"
 					"ARCHIVE is the original Japanese-named TH01 PF archive, not REIIDEN.EXE.\n"
@@ -78,9 +90,14 @@ int main(int argc, char **argv)
 			else if(option == "--seed") seed = number(value);
 			else if(option == "--lives") lives = number(value);
 			else if(option == "--bombs") bombs = number(value);
+			else if(option == "--score") score = number(value);
+			else if(option == "--point-value") point_value = number(value);
+			else if(option == "--pellet-speed") pellet_speed = signed_number(value);
 			else throw std::runtime_error("unknown option: " + std::string(option));
 		}
-		if(data.empty() || input_path.empty() || stage >= 20 || route > 1 || rank > 3 || lives > 6 || bombs > 5)
+		if(data.empty() || input_path.empty() || stage >= 20 || route > 1 || rank > 3 ||
+			lives > 6 || bombs > 5 || point_value > 65535U ||
+			pellet_speed < -32768 || pellet_speed > 32767)
 			throw std::runtime_error("missing data/input or out-of-range start option");
 		const auto inputs = read(input_path);
 		if(inputs.size() % 6 != 0) throw std::runtime_error("input ends in a partial six-byte sample");
@@ -90,6 +107,9 @@ int main(int argc, char **argv)
 		s.rank = static_cast<std::int8_t>(rank);
 		s.rem_lives = static_cast<std::int16_t>(lives);
 		s.rem_bombs = static_cast<std::int8_t>(bombs);
+		s.score = score;
+		s.point_value = static_cast<std::uint16_t>(point_value);
+		s.projectiles.pellet_speed_x40 = static_cast<std::int16_t>(pellet_speed);
 		s.random_seed = s.frame_rand = seed;
 		const auto scene = static_cast<std::uint8_t>(stage < 5 ? 0 : (stage / 5 * 2 - 1 + route));
 		const auto loaded = stage_scene_load_from_archive(read(data), scene, s.stage);
